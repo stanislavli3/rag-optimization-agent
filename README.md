@@ -1,136 +1,128 @@
-# Evaluation-Driven Agentic Optimization of Transformer-Based RAG Systems
+# RAG Optimizer
+
+### Upload your data. Find the best RAG config. Automatically.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://python.org)
-[![Course](https://img.shields.io/badge/Course-Deep%20%26%20Generative%20Learning-teal.svg)](#alignment-with-course-topics)
+[![TypeScript](https://img.shields.io/badge/TypeScript-React-blue.svg)](https://typescriptlang.org)
+[![Django](https://img.shields.io/badge/Backend-Django-green.svg)](https://djangoproject.com)
 
-> An agent-driven experimental framework that replaces manual RAG tuning with systematic, evaluation-driven optimization — treating RAG configuration as a scientific process, not an engineering heuristic.
-
----
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Motivation](#motivation)
-- [Project Goals](#project-goals)
-- [Architecture](#architecture)
-- [Methodology](#methodology)
-- [Evaluation Framework](#evaluation-framework)
-- [Optimization Search Space](#optimization-search-space)
-- [Data & Experimental Setup](#data--experimental-setup)
-- [Technical Stack](#technical-stack)
-- [Deliverables](#deliverables)
-- [Alignment with Course Topics](#alignment-with-course-topics)
-- [Related Work](#related-work)
-- [Repository Structure](#repository-structure)
-- [Getting Started](#getting-started)
-- [References](#references)
-- [License](#license)
+> **RAG Optimizer** is a full-stack platform that finds the optimal Retrieval-Augmented Generation configuration for your specific data. Upload a sample of your documents, and an AI agent systematically tests chunk sizes, retrieval strategies, reranking methods, and prompting techniques to find what works best for your use case.
 
 ---
 
-## Overview
+## The Problem
 
-This project develops an evaluation-driven agentic framework for analyzing and improving transformer-based generative models, with a specific focus on **Retrieval-Augmented Generation (RAG)** systems. RAG serves as a controlled experimental setting for studying how conditioning, attention, and retrieval quality influence autoregressive generation.
+Every RAG pipeline needs tuning, and every dataset needs different settings. Legal documents need large chunks and exact keyword matching. FAQs need small chunks and semantic search. Medical papers need aggressive reranking. There is no universal best config.
 
-Inspired by the scientific workflow modeled in Sakana AI's AI Scientist (hypothesis → experiment → evaluation → decision → iteration), this project applies the same principles in a constrained, reproducible, and measurable manner. The core insight: **RAG optimization is best framed as a latent variable model optimization problem** where evaluation metrics serve as non-differentiable reward signals.
+Today, engineers spend days manually tweaking parameters, eyeballing results, with no systematic comparison and no reproducibility. The search space spans **46,000+ possible configurations** (RAGSmith, 2025), making manual optimization impractical.
 
-### Deep Learning Connection
-
-RAG is a latent variable model: **P(y|x) = Σ_z P(y|x,z) · P(z|x)**, where retrieved documents *z* act as discrete latent variables. This parallels VAE structure (retriever = encoder, generator = decoder) with ELBO optimization (Lewis et al., NeurIPS 2020). When retrieved passages are concatenated with the input, transformer self-attention treats them as additional key-value memory, extending parametric memory with non-parametric external knowledge.
+**RAG Optimizer automates this entire process.**
 
 ---
 
-## Motivation
+## How It Works
 
-Transformer-based generative models are highly sensitive to how external context is retrieved, structured, and presented during generation. In practice:
+```
+1. Upload          2. Auto-Optimize         3. Get Results
+───────────        ──────────────────       ─────────────────
+Upload 10-50       Agent runs 15-20         Dashboard shows
+sample docs +      experiments on YOUR      best config +
+test questions     data, learning from      metrics + charts +
+(or auto-generate) each round               exportable config
+```
 
-- **RAG adoption hit 51% among enterprises in 2024** (Menlo Ventures), yet optimization remains ad-hoc
-- The configuration search space spans **46,000+ possible combinations** (RAGSmith, 2025)
-- Chunking strategy alone causes up to **9% variance in recall** between best and worst approaches
-- The "lost in the middle" effect degrades performance by **>30%** when relevant information shifts to middle positions
+### User Flow
 
-This project replaces manual trial-and-error with an **agent-driven experimental loop** that systematically explores design choices and evaluates their impact using quantitative metrics.
-
----
-
-## Project Goals
-
-| # | Goal | Description |
-|---|------|-------------|
-| 1 | **Analyze** | How retrieval configuration affects autoregressive generation quality, studying attention over retrieved context as external key-value memory |
-| 2 | **Automate** | Build an agent that systematically explores the RAG design space via controlled ablation studies |
-| 3 | **Evaluate** | Apply RAGAS metrics (faithfulness, groundedness, answer relevance) + IR metrics (NDCG@k, MRR) with bootstrap CIs and effect sizes |
-| 4 | **Deliver** | Interactive Streamlit web dashboard with leaderboard → comparison → trace drill-down — not a notebook or standalone model |
+1. **Upload** sample documents (PDF, text, markdown)
+2. **Add** test questions with expected answers (or let the system auto-generate them)
+3. **Click** "Find Best Config"
+4. **Agent runs** experiments on your data, using multi-armed bandit exploration to focus on promising configs
+5. **Dashboard shows** the winning configuration with full metrics and comparison charts
+6. **Export** the config as YAML/JSON to plug directly into your LangChain or LlamaIndex pipeline
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     Agent Controller                         │
-│  ┌───────────┐  ┌───────────┐  ┌──────────┐  ┌──────────┐  │
-│  │ Hypothesize│→│  Execute   │→│ Evaluate  │→│  Decide   │  │
-│  │ RAG config │  │ pipeline   │  │ RAGAS +   │  │ compare,  │  │
-│  │            │  │ on dataset │  │ IR metrics│  │ iterate   │  │
-│  └───────────┘  └───────────┘  └──────────┘  └──────────┘  │
-│       ↑                                            │         │
-│       └────────────── feedback loop ───────────────┘         │
-└─────────────────────────────────────────────────────────────┘
-         │                    │                    │
-    ┌────▼────┐         ┌────▼────┐         ┌────▼────┐
-    │ Vector  │         │  LLM    │         │Experiment│
-    │ Index   │         │Generator│         │  Logs    │
-    │(Chroma) │         │(Mistral)│         │ (JSON)   │
-    └─────────┘         └─────────┘         └─────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│  React / TypeScript Frontend                                     │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │
+│  │  Upload   │ │  Config  │ │ Dashboard│ │  Agent   │           │
+│  │  Docs     │ │  Lab     │ │ Results  │ │Trajectory│           │
+│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘           │
+└───────┼─────────────┼────────────┼─────────────┼────────────────┘
+        │             │            │             │
+        ▼             ▼            ▼             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Django REST API                                                 │
+│  /api/documents/   /api/experiments/   /api/results/             │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │
+                ┌───────────┼───────────┐
+                ▼           ▼           ▼
+        ┌──────────┐ ┌──────────┐ ┌──────────┐
+        │  Celery  │ │PostgreSQL│ │  Redis   │
+        │  Worker  │ │  (data)  │ │ (queue)  │
+        └────┬─────┘ └──────────┘ └──────────┘
+             │
+     ┌───────┼───────────────┐
+     ▼       ▼               ▼
+┌────────┐ ┌─────────┐ ┌──────────┐
+│ChromaDB│ │   LLM   │ │  RAGAS   │
+│+ BM25  │ │(Mistral)│ │Evaluator │
+└────────┘ └─────────┘ └──────────┘
 ```
 
-### Key Components
+### The Agentic Loop (Core Engine)
 
-| Component | Description |
-|-----------|-------------|
-| **Transformer-based Generator** | Autoregressive LLM conditioned on retrieved context (Mistral-7B / Llama-3.1-8B) |
-| **Retriever & Index** | ChromaDB vector store + BM25 hybrid search with configurable embedding models |
-| **Agent Controller** | Manages hypothesis generation, experiment scheduling, and MAB-style decision-making |
-| **Evaluation Harness** | Computes RAGAS + IR metrics with paired bootstrap significance testing |
-| **Experiment Logger** | Stores configurations, metrics, and agent decision trajectories for reproducibility |
-| **Web Dashboard** | Streamlit app for interactive exploration of results |
+```python
+while budget_remaining:
+    past_results = db.get_all_experiments()
+    next_config = agent.propose(past_results)   # MAB-style exploration
+    results = run_pipeline(next_config)          # Execute on user's data
+    metrics = compute_ragas_metrics(results)     # Evaluate
+    agent.update_beliefs(next_config, metrics)   # Learn and iterate
+```
+
+The agent is not random grid search. It learns from each experiment and focuses on promising parameter regions, achieving near-optimal results in ~20% of the runs that grid search would require (AutoRAG-HP, EMNLP 2024).
 
 ---
 
-## Methodology
+## Technical Stack
 
-### Agentic Experimentation Loop
+| Layer | Technology |
+|-------|-----------|
+| **Frontend** | TypeScript, React, Plotly.js / Recharts |
+| **Backend** | Django, Django REST Framework |
+| **Task Queue** | Celery + Redis (async experiment execution) |
+| **Database** | PostgreSQL (experiments, results, configs) |
+| **Vector Store** | ChromaDB + BM25 hybrid search |
+| **LLM Generator** | Mistral-7B / Llama-3.1-8B via HuggingFace |
+| **Embeddings** | all-MiniLM-L6-v2, BGE-M3 via sentence-transformers |
+| **Reranker** | cross-encoder/ms-marco-MiniLM-L-6-v2 |
+| **Evaluation** | RAGAS + DeepEval + custom IR metrics |
+| **Agent Logic** | Custom Python controller with MAB strategy |
+| **Deployment** | Docker Compose |
 
-The system follows a closed-loop experimental process inspired by the scientific method:
+---
 
-**Hypothesize → Execute → Evaluate → Decide → Iterate**
+## Optimization Search Space
 
-#### 1. Hypothesis Generation
-The agent proposes testable RAG configurations by varying:
-- Chunk size (128, 256, 512 tokens)
-- Top-k retrieval depth (3, 5, 10 documents)
-- Reranking strategy (none, ColBERT, cross-encoder)
-- Prompting technique (zero-shot, few-shot, chain-of-thought)
-- Embedding model (all-MiniLM-L6-v2, BGE-M3, E5)
+The agent explores these parameters to find the best combination for your data:
 
-#### 2. Experiment Execution
-Each configuration runs under a **fixed computational budget** using:
-- A consistent evaluation dataset with ground-truth answers
-- A standardized transformer-based generator
-- Controlled retrieval and indexing parameters
-- Seeded runs for reproducibility
+| Parameter | Options | Why It Matters |
+|-----------|---------|---------------|
+| **Chunk Size** | 128, 256, 512, 1024 tokens | Legal docs need big chunks; FAQs need small ones |
+| **Chunk Overlap** | 10%, 15%, 20% | Prevents splitting key info across boundaries |
+| **Top-k Depth** | 3, 5, 10, 20 documents | More docs = more noise; fewer = coverage gaps |
+| **Reranking** | None, ColBERT, cross-encoder | Up to 67% retrieval failure reduction |
+| **Hybrid Search** | Vector-only, BM25+vector | 15-30% precision improvement for keyword-heavy domains |
+| **Prompting** | Zero-shot, few-shot, chain-of-thought | CoT improves across 9 reasoning datasets |
+| **Embedding Model** | MiniLM, BGE-M3, E5 | Domain fine-tuning yields +10-30% gains |
 
-#### 3. Evaluation
-Outputs are assessed using RAG-specific quantitative metrics (see [Evaluation Framework](#evaluation-framework)).
-
-#### 4. Decision & Iteration
-The agent:
-- Compares results against baseline and previous configurations
-- Selects best-performing configuration based on composite scores
-- Proposes subsequent experiments informed by observed patterns
-- Uses **multi-armed bandit (MAB) exploration** to balance exploration vs. exploitation (inspired by AutoRAG-HP, EMNLP 2024)
+Different data types need completely different settings. That's why you need to optimize on YOUR data.
 
 ---
 
@@ -141,142 +133,66 @@ The agent:
 | Metric | What It Measures |
 |--------|-----------------|
 | **NDCG@k** | Rank-aware graded relevance (MTEB default) |
-| **Context Precision** | Are relevant chunks ranked higher than irrelevant ones? (RAGAS) |
-| **Context Recall** | Does the context contain all needed information? (RAGAS) |
-| **MRR** | How quickly does the first relevant document surface? |
-| **Recall@k / Precision@k** | Coverage vs. noise tradeoff |
+| **Context Precision** | Are relevant chunks ranked higher? (RAGAS) |
+| **Context Recall** | Does the context contain all needed info? (RAGAS) |
+| **MRR** | Speed to first relevant document |
 
 ### Generation Metrics
 
 | Metric | What It Measures |
 |--------|-----------------|
-| **Faithfulness** | Is every claim in the output supported by retrieved context? (#1 metric) |
-| **Groundedness** | Are there no hallucinated claims in the output? |
-| **Answer Relevance** | Does the generated answer address the user query? |
+| **Faithfulness** | Every claim supported by context? (most important metric) |
+| **Groundedness** | No hallucinated claims in output? |
+| **Answer Relevance** | Does the answer address the query? |
 | **Answer Correctness** | F1-like factual overlap with ground truth |
-| **RAGAS Score** | Composite score across all dimensions |
-
-### Efficiency Metrics
-
-| Metric | What It Measures |
-|--------|-----------------|
-| **Latency (ms)** | End-to-end query response time |
-| **Token Usage** | Total tokens consumed per query |
-| **Cost per Query** | Estimated compute cost |
+| **RAGAS Score** | Composite across all dimensions |
 
 ### Statistical Rigor
 
-All comparisons use:
-- **Paired bootstrap tests** (10,000+ samples) for significance
-- **BCa confidence intervals** (bias-corrected and accelerated)
-- **Cohen's d** effect sizes alongside p-values
-- **Benjamini-Hochberg correction** for multiple comparisons across configurations
-
-### Why RAGAS over BLEU/ROUGE?
-
-BLEU and ROUGE measure surface-level n-gram overlap. They cannot detect hallucination, assess groundedness, or evaluate whether answers are faithful to retrieved context. RAGAS uses LLM-as-judge for semantic evaluation of each dimension independently, which is essential for RAG-specific quality assessment.
+All comparisons use paired bootstrap tests (10K+ samples), BCa confidence intervals, Cohen's d effect sizes, and Benjamini-Hochberg correction for multiple comparisons.
 
 ---
 
-## Optimization Search Space
+## Dashboard Pages
 
-The agent explores these parameters, yielding ~46,000+ possible configurations:
-
-| Parameter | Options | Key Research Finding |
-|-----------|---------|---------------------|
-| **Chunk Size** | 128, 256, 512, 1024 tokens | Factoid queries → small chunks; reasoning → large (NVIDIA, 2025) |
-| **Chunk Overlap** | 10%, 15%, 20% | 15% optimal on FinanceBench (NVIDIA) |
-| **Chunking Strategy** | Fixed, recursive, semantic | Recursive at 512 tokens is strongest default |
-| **Top-k Depth** | 3, 5, 10, 20 | Fewer, more relevant docs often beat more docs |
-| **Reranking** | None, ColBERT, cross-encoder | Up to 67% retrieval failure reduction (Anthropic) |
-| **Hybrid Search** | Vector-only, BM25+vector (α=0.3–0.7) | 15–30% precision improvements |
-| **Prompting** | Zero-shot, few-shot, CoT | CoT-RAG improves across 9 reasoning datasets |
-| **Embedding Model** | all-MiniLM-L6-v2, BGE-M3, E5 | Domain fine-tuning yields +10–30% gains |
-| **Query Transform** | None, HyDE, decomposition | HyDE adds 25–60% latency but bridges query-doc gap |
+| Page | What Users See |
+|------|---------------|
+| **Upload** | Drag-and-drop documents, add test questions or auto-generate them |
+| **Configuration Lab** | Manual mode: pick params from dropdowns, click Run |
+| **Auto-Optimize** | Agent mode: click one button, agent finds best config |
+| **Results** | Heatmaps, radar charts, KPI cards with metric deltas |
+| **Comparison** | Side-by-side configs with significance indicators (*, **, ***) |
+| **Agent Trajectory** | Visual timeline of what the agent tried and why |
+| **Export** | Download best config as YAML/JSON for production use |
 
 ---
 
-## Data & Experimental Setup
+## Deep Learning Connection
 
-### Datasets
-
-| Dataset | Size | Purpose |
-|---------|------|---------|
-| **Natural Questions** | 323K queries | Real Google searches against Wikipedia — primary benchmark |
-| **HotpotQA** | 113K queries | Multi-hop reasoning; tests iterative retrieval |
-| **RAGAS Synthetic** | 200–500 custom | Auto-generated via knowledge graph transforms |
-
-### Evaluation Dataset Design
-
-- 50 hand-crafted golden questions with expert-verified answers
-- 200–300 synthetic questions from RAGAS (50% simple, 25% reasoning, 25% multi-context)
-- 50+ adversarial edge cases
-- Version-controlled — never modified in-place
-
----
-
-## Technical Stack
-
-| Layer | Technology |
-|-------|-----------|
-| **Generator** | Mistral-7B / Llama-3.1-8B via HuggingFace Transformers |
-| **Retriever** | ChromaDB (vector) + BM25 (keyword) hybrid search |
-| **Embeddings** | all-MiniLM-L6-v2, BGE-M3 via sentence-transformers |
-| **Reranker** | cross-encoder/ms-marco-MiniLM-L-6-v2 |
-| **Evaluation** | RAGAS + DeepEval + custom IR metric implementations |
-| **Orchestration** | LangChain + custom Python agent controller |
-| **Dashboard** | Streamlit + Plotly |
-| **Experiment Tracking** | JSON logs + SQLite |
-
----
-
-## Deliverables
-
-### Primary: Interactive Web Dashboard (Streamlit)
-
-| Page | Description |
-|------|-------------|
-| **Configuration Lab** | Select RAG parameters, run experiments via UI |
-| **Results Dashboard** | Heatmaps, radar charts, KPI cards with metric deltas |
-| **Comparison View** | Side-by-side configs with significance indicators (*, **, ***) |
-| **Agent Trajectory** | Decision path visualization across iterations |
-| **Export** | CSV/JSON results + publication-ready SVG/PDF charts |
-
-### Supporting Deliverables
-
-- **Reproducible Pipeline** — Documented code, configs, README, version-controlled datasets
-- **Quantitative Report** — Ablation tables, bootstrap CIs, effect sizes, per-question-type analysis
-- **Agent Decision Logs** — Full trajectory: what was tried, scores achieved, rationale for next config
-- **Final Poster & Presentation** — Summarizing methodology, findings, and insights
-
----
-
-## Alignment with Course Topics
-
-This project directly addresses core topics in **Deep and Generative Learning**:
+This project is built for a **Deep & Generative Learning** course. The theoretical foundations:
 
 | Course Topic | Connection |
 |-------------|------------|
-| **Transformers & Attention** | Attention over retrieved context as external key-value memory; "lost-in-the-middle" effect from positional encoding decay |
-| **Autoregressive Models** | Conditional generation P(y\|x,D) where conditioning set D is dynamically determined at inference |
-| **Latent Variable Models / VAEs** | RAG as discrete latent variable model with ELBO optimization; retriever = encoder, generator = decoder |
-| **Evaluation of Generative Systems** | RAGAS framework: 30+ quantitative metrics for retrieval and generation quality |
-| **Real-World Implementation** | Production-style Streamlit web application for interactive RAG analysis |
-| **Emerging Trends** | Agentic AI for automated pipeline optimization; MAB-based hyperparameter search |
+| **Transformers & Attention** | Retrieved context becomes external key-value memory for transformer self-attention |
+| **Autoregressive Models** | Conditional generation P(y\|x,D) where D is dynamically determined at inference |
+| **Latent Variable Models** | RAG as discrete latent variable model: P(y\|x) = Σ_z P(y\|x,z)·P(z\|x), paralleling VAE with ELBO optimization |
+| **Evaluation** | RAGAS framework: 30+ metrics for generation quality assessment |
+| **Emerging Trends** | Agentic AI for automated optimization; MAB-based hyperparameter search |
 
 ---
 
 ## Related Work
 
-| System | What It Does | How We Differ |
-|--------|-------------|--------------|
-| **AI Scientist v2** (Sakana AI, 2025) | Agentic tree search for automated experiments; first AI paper accepted at ICLR workshop | We adapt the loop for constrained, reproducible RAG-specific optimization with robust RAGAS evaluation |
-| **RAGAS** (Es et al., EACL 2024) | Reference-free RAG evaluation framework with 30+ metrics | We integrate RAGAS as our primary evaluation backend |
-| **DeepEval** (Confident AI) | "Pytest for LLMs" with debuggable scores and CI/CD integration | We use DeepEval for JSON-confineable metric computation |
-| **AutoRAG-HP** (EMNLP 2024) | Multi-armed bandit for RAG hyperparameter tuning; 80% fewer API calls than grid search | We adopt MAB exploration strategy within our agentic loop |
-| **RAGSmith** (2025) | NAS-inspired genetic algorithm over 46,080 RAG configurations | We frame our search space similarly but use agent-driven sequential exploration |
-| **DSPy** (Stanford NLP) | Programmatic LLM pipeline optimization via Bayesian optimization | Complementary approach; we focus on retrieval-side optimization |
-| **Self-RAG** (ICLR 2024) | LM generates reflection tokens controlling retrieval and self-critique | Informs our agent's decide-to-retrieve logic |
+| System | What It Does | Gap We Fill |
+|--------|-------------|------------|
+| **AI Scientist v2** (Sakana AI) | Agentic tree search for automated research | We constrain to RAG-specific optimization with robust evaluation |
+| **RAGAS** (EACL 2024) | RAG evaluation metrics | No optimization, no UI, no agent |
+| **AutoRAG-HP** (EMNLP 2024) | MAB-based RAG tuning | No web interface, no document upload, no product |
+| **RAGSmith** (2025) | NAS over 46K RAG configs | Research framework, not a usable platform |
+| **LangSmith** | LLM tracing and debugging | No automated optimization |
+| **Arize Phoenix** | LLM observability | No experiment runner |
+
+**No existing tool offers: upload docs → agent finds best config → visual dashboard → export config.** That's the gap.
 
 ---
 
@@ -285,13 +201,11 @@ This project directly addresses core topics in **Deep and Generative Learning**:
 1. Lewis, P., et al. (2020). "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks." *NeurIPS 2020*.
 2. Es, S., et al. (2024). "RAGAs: Automated Evaluation of Retrieval Augmented Generation." *EACL 2024*.
 3. Yamada, Y., et al. (2025). "The AI Scientist-v2: Workshop-Level Automated Scientific Discovery via Agentic Tree Search." *arXiv:2504.08066*.
-4. Beel, J., et al. (2025). "Evaluating Sakana's AI Scientist: Bold Claims, Mixed Results." *arXiv:2502.14297*.
-5. Asai, A., et al. (2024). "Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection." *ICLR 2024 (Oral)*.
-6. NVIDIA (2025). "Finding the Best Chunking Strategy for Accurate AI Responses." *NVIDIA Technical Blog*.
-7. Anthropic (2024). "Introducing Contextual Retrieval." *anthropic.com*.
-8. Khattab, O., et al. (2024). "DSPy: Compiling Declarative Language Model Calls into Self-Improving Pipelines." *ICLR 2024*.
-9. Liu, N., et al. (2024). "Lost in the Middle: How Language Models Use Long Contexts." *TACL*.
-10. Firecrawl (2025). "Best Chunking Strategies for RAG in 2025."
+4. Asai, A., et al. (2024). "Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection." *ICLR 2024*.
+5. NVIDIA (2025). "Finding the Best Chunking Strategy for Accurate AI Responses." *NVIDIA Technical Blog*.
+6. Anthropic (2024). "Introducing Contextual Retrieval." *anthropic.com*.
+7. Khattab, O., et al. (2024). "DSPy: Compiling Declarative Language Model Calls into Self-Improving Pipelines." *ICLR 2024*.
+8. Liu, N., et al. (2024). "Lost in the Middle: How Language Models Use Long Contexts." *TACL*.
 
 ---
 
@@ -302,3 +216,5 @@ MIT License — See [LICENSE](LICENSE) for details.
 ---
 
 *Stanislav Li — Deep & Generative Learning — Spring 2026*
+
+---
