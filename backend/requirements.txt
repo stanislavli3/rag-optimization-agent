@@ -1,0 +1,9 @@
+django
+djangorestframework
+celery
+redis
+chromadb
+ragas
+deepeval
+sentence-transformers
+langchain
