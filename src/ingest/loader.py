@@ -25,15 +25,43 @@ def _lc_document_cls():
 
 
 def _load_pdf(path: Path, Doc) -> list:
+    # Preferred: langchain-community PyPDFLoader (keeps per-page metadata).
     try:
         from langchain_community.document_loaders import PyPDFLoader  # type: ignore
         pages = PyPDFLoader(str(path)).load()
         for i, d in enumerate(pages):
-            d.metadata.update({"source_file": path.name, "page_number": i, "file_type": "pdf"})
-        return pages
+            d.metadata.update(
+                {"source_file": path.name, "page_number": i, "file_type": "pdf"}
+            )
+        return [d for d in pages if (d.page_content or "").strip()]
     except Exception as e:
-        logger.warning("Failed to load PDF %s: %s", path, e)
-        return []
+        logger.warning("PyPDFLoader failed for %s: %s; trying pypdf direct", path, e)
+
+    # Fallback: raw pypdf — works without langchain-community installed.
+    try:
+        from pypdf import PdfReader  # type: ignore
+        reader = PdfReader(str(path))
+        out = []
+        for i, page in enumerate(reader.pages):
+            text = (page.extract_text() or "").strip()
+            if not text:
+                continue
+            out.append(
+                Doc(
+                    page_content=text,
+                    metadata={
+                        "source_file": path.name,
+                        "page_number": i,
+                        "file_type": "pdf",
+                    },
+                )
+            )
+        if out:
+            return out
+        logger.warning("PDF %s yielded 0 pages with extractable text", path)
+    except Exception as e:
+        logger.warning("pypdf direct load failed for %s: %s", path, e)
+    return []
 
 
 def _load_md(path: Path, Doc) -> list:
