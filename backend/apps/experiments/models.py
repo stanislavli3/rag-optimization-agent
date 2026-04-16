@@ -150,3 +150,38 @@ class IterationResult(models.Model):
         tag = " [baseline]" if self.is_baseline else ""
         score = f"{self.ragas_score:.3f}" if self.ragas_score is not None else "—"
         return f"Iter {self.iteration_number}{tag}: ragas={score}"
+
+
+class AgentEvent(models.Model):
+    """
+    Append-only feed of BFTS agent events for real-time SSE streaming.
+
+    The BFTS loop writes one row per observable moment (node_start, node_success,
+    stage_change, ablation, complete …). The SSE endpoint polls rows with id
+    greater than the last-seen id every 500 ms and flushes them to the client.
+    """
+
+    EVENT_CHOICES = [
+        ("node_start", "node_start"),
+        ("node_success", "node_success"),
+        ("node_failed", "node_failed"),
+        ("node_pruned", "node_pruned"),
+        ("stage_change", "stage_change"),
+        ("ablation", "ablation"),
+        ("insight", "insight"),
+        ("complete", "complete"),
+    ]
+
+    experiment = models.ForeignKey(
+        Experiment, on_delete=models.CASCADE, related_name="events"
+    )
+    event_type = models.CharField(max_length=30, choices=EVENT_CHOICES)
+    payload = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["id"]
+        indexes = [models.Index(fields=["experiment", "id"])]
+
+    def __str__(self):
+        return f"{self.event_type} @ {self.created_at:%H:%M:%S}"
