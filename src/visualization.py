@@ -28,11 +28,26 @@ def _go():
     return go
 
 
+_STAGE_INT_TO_NAME = {0: "PRELIMINARY", 1: "BASELINE", 2: "EXPLORATION", 3: "ABLATION"}
+
+
+def _stage_name(raw: Any) -> str:
+    """Normalise a stage value (IntEnum, int, or str) to an upper-case label."""
+    if raw is None:
+        return "BFTS"
+    name = getattr(raw, "name", None)
+    if isinstance(name, str) and name:
+        return name.upper()
+    if isinstance(raw, int):
+        return _STAGE_INT_TO_NAME.get(int(raw), f"STAGE_{raw}")
+    return str(raw).upper() or "BFTS"
+
+
 def plot_trajectory(trajectory: list[dict], stage_transitions: list[dict] | None = None):
     go = _go()
     xs = list(range(len(trajectory)))
     ys = [float(n.get("score") or 0.0) for n in trajectory]
-    stages = [(n.get("stage") or "").upper() or "BFTS" for n in trajectory]
+    stages = [_stage_name(n.get("stage")) for n in trajectory]
     colors = [_STAGE_COLORS.get(s, "#3b82f6") for s in stages]
 
     fig = go.Figure()

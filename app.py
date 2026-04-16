@@ -42,6 +42,22 @@ def _init_state() -> None:
 _init_state()
 
 
+def _llm_badge() -> str:
+    """Short human-readable label for the current LLM provider."""
+    llm = get_llm()
+    if type(llm).__name__ == "MockLLM":
+        return "🔌 MockLLM (offline stubs)"
+    inner = getattr(llm, "_m", None)
+    model = getattr(inner, "model_name", None) or getattr(inner, "model", None) or "?"
+    base = getattr(inner, "openai_api_base", None) or ""
+    if "11434" in str(base):
+        return f"🟢 Ollama · {model}"
+    if base:
+        return f"🟢 Local · {model} @ {base}"
+    return f"☁ Cloud · {model}"
+
+
+st.sidebar.markdown(f"**LLM**: {_llm_badge()}")
 PAGE = st.sidebar.radio("Page", ["1 · Upload & TestGen", "2 · Run Optimization", "3 · Results", "4 · Export"])
 
 

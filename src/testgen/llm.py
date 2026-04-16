@@ -62,20 +62,98 @@ class _LCWrapper:
         return str(content)
 
 
-def get_llm(model: str | None = None, provider: str = "anthropic") -> LLMLike:
-    """Return a real LLM wrapper if credentials/deps are available, else MockLLM."""
+def get_llm(model: str | None = None, provider: str | None = None) -> LLMLike:
+    """Return a real LLM wrapper if credentials/deps are available, else MockLLM.
+
+    Provider resolution order (first match wins):
+      1. Explicit `provider` argument.
+      2. `LLM_PROVIDER` env var. Values: local | ollama | anthropic | openai.
+      3. `local` when `OLLAMA_HOST` or `LLM_BASE_URL` is set.
+      4. `anthropic` when `ANTHROPIC_API_KEY` is set.
+      5. `openai` when `OPENAI_API_KEY` is set.
+      6. Auto-probe `http://localhost:11434` — fall back to local Ollama if up.
+      7. MockLLM.
+
+    Local path uses the OpenAI-compatible REST surface (`/v1/chat/completions`)
+    so the same wiring works with Ollama, LM Studio, vLLM, and llama.cpp
+    server. Override with env:
+      - LLM_BASE_URL   (default: http://localhost:11434/v1  — Ollama)
+      - LLM_MODEL      (default: qwen2.5:7b-instruct)
+      - LLM_API_KEY    (default: "ollama", most local servers ignore it)
+      - LLM_TEMPERATURE
+    """
     import os
 
+    prov = (provider or os.getenv("LLM_PROVIDER") or "").strip().lower()
+    if not prov:
+        if os.getenv("OLLAMA_HOST") or os.getenv("LLM_BASE_URL"):
+            prov = "local"
+        elif os.getenv("ANTHROPIC_API_KEY"):
+            prov = "anthropic"
+        elif os.getenv("OPENAI_API_KEY"):
+            prov = "openai"
+        else:
+            prov = "local" if _probe_local_llm() else "mock"
+
     try:
-        if provider == "anthropic" and os.getenv("ANTHROPIC_API_KEY"):
+        if prov in ("local", "ollama", "lmstudio", "vllm", "llamacpp"):
+            return _build_local_llm(model)
+        if prov == "anthropic" and os.getenv("ANTHROPIC_API_KEY"):
             from langchain_anthropic import ChatAnthropic  # type: ignore
-            return _LCWrapper(ChatAnthropic(model=model or "claude-sonnet-4-5", temperature=0))
-        if provider == "openai" and os.getenv("OPENAI_API_KEY"):
+            return _LCWrapper(
+                ChatAnthropic(model=model or "claude-sonnet-4-5", temperature=0)
+            )
+        if prov == "openai" and os.getenv("OPENAI_API_KEY"):
             from langchain_openai import ChatOpenAI  # type: ignore
             return _LCWrapper(ChatOpenAI(model=model or "gpt-4o-mini", temperature=0))
-    except Exception:
-        pass
+    except Exception as exc:  # pragma: no cover — surfaced via MockLLM fallback
+        import logging
+
+        logging.getLogger(__name__).warning("LLM init failed (%s); falling back: %s", prov, exc)
     return MockLLM()
+
+
+def _probe_local_llm(timeout: float = 0.4) -> bool:
+    """Quick TCP probe — returns True iff Ollama (or a compatible server) answers."""
+    import os
+    from urllib.parse import urlparse
+    import urllib.request
+
+    base = os.getenv("LLM_BASE_URL", "http://localhost:11434/v1")
+    # Ollama health is at /api/tags, OpenAI-compatible servers expose /v1/models.
+    # Try both: whichever responds first is good enough.
+    host = urlparse(base).netloc or "localhost:11434"
+    for probe in (f"http://{host}/api/tags", f"{base.rstrip('/')}/models"):
+        try:
+            req = urllib.request.Request(probe, method="GET")
+            with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec - local
+                if 200 <= resp.status < 500:
+                    return True
+        except Exception:
+            continue
+    return False
+
+
+def _build_local_llm(model_override: str | None) -> LLMLike:
+    """Wire an OpenAI-compatible local endpoint (default: Ollama)."""
+    import os
+
+    from langchain_openai import ChatOpenAI  # type: ignore
+
+    base_url = os.getenv("LLM_BASE_URL", "http://localhost:11434/v1")
+    model = model_override or os.getenv("LLM_MODEL", "qwen2.5:7b-instruct")
+    api_key = os.getenv("LLM_API_KEY", "ollama")
+    temperature = float(os.getenv("LLM_TEMPERATURE", "0"))
+
+    chat = ChatOpenAI(
+        model=model,
+        temperature=temperature,
+        base_url=base_url,
+        api_key=api_key,
+        timeout=120,
+        max_retries=1,
+    )
+    return _LCWrapper(chat)
 
 
 def parse_json_block(text: str) -> Any:
