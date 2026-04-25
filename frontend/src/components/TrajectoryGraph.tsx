@@ -1,12 +1,13 @@
 /**
  * TrajectoryGraph — score-per-iteration line chart with stage bands.
  *
- * Renders the RAGAS score of each completed BFTS node in the order the agent
- * explored them, shading horizontal bands to reflect stage boundaries and
- * overlaying the running best-so-far envelope. Lightweight SVG — no d3/plotly
- * dependency — so it can stream-update on every SSE event without jank.
+ * Lightweight SVG (no D3/Plotly) so it can update on every SSE tick without
+ * jank. Notion-style: faint background bands, a thin charcoal line for raw
+ * scores, and a dotted accent "best-so-far" envelope.
  */
 import { CSSProperties, useMemo } from "react";
+
+import { card, colors, font, space, stageColor } from "../theme";
 
 export type TrajectoryStage = "preliminary" | "baseline" | "exploration" | "ablation";
 
@@ -23,30 +24,26 @@ export interface TrajectoryGraphProps {
   width?: number;
   height?: number;
   baselineScore?: number | null;
+  /** Optional heading — set to `false` to hide the card header. */
+  title?: string | false;
 }
 
+// Translucent versions of the stage palette for the background bands.
 const STAGE_FILL: Record<TrajectoryStage, string> = {
-  preliminary: "rgba(125,211,252,0.08)",
-  baseline: "rgba(96,165,250,0.08)",
-  exploration: "rgba(167,139,250,0.08)",
-  ablation: "rgba(245,158,11,0.08)",
+  preliminary: "rgba(107, 114, 128, 0.06)",
+  baseline: "rgba(35, 131, 226, 0.07)",
+  exploration: "rgba(105, 64, 165, 0.07)",
+  ablation: "rgba(203, 145, 47, 0.08)",
 };
-
-const STAGE_STROKE: Record<TrajectoryStage, string> = {
-  preliminary: "#7dd3fc",
-  baseline: "#60a5fa",
-  exploration: "#a78bfa",
-  ablation: "#f59e0b",
-};
-
 
 export default function TrajectoryGraph({
   points,
   width = 540,
   height = 260,
   baselineScore = null,
+  title = "Score trajectory",
 }: TrajectoryGraphProps) {
-  const padL = 36;
+  const padL = 40;
   const padR = 16;
   const padT = 18;
   const padB = 28;
@@ -56,9 +53,9 @@ export default function TrajectoryGraph({
   const { xs, ys, bestCurve, maxX, scoreMin, scoreMax, stageSpans } = useMemo(() => {
     if (points.length === 0) {
       return {
-        xs: [],
-        ys: [],
-        bestCurve: [],
+        xs: [] as number[],
+        ys: [] as number[],
+        bestCurve: [] as number[],
         maxX: 1,
         scoreMin: 0,
         scoreMax: 1,
@@ -72,7 +69,6 @@ export default function TrajectoryGraph({
     const pad = Math.max(0.02, (hi - lo) * 0.1);
     let best = -Infinity;
     const bc = scores.map((s) => (best = Math.max(best, s)));
-    // Detect stage transitions to draw background bands.
     const spans: Array<{ stage: TrajectoryStage; x0: number; x1: number }> = [];
     let cur = points[0].stage;
     let x0 = points[0].iteration;
@@ -114,14 +110,15 @@ export default function TrajectoryGraph({
 
   return (
     <div style={wrap}>
-      <div style={header}>
-        Score trajectory
-        <span style={{ fontWeight: 400, color: "#64748b", fontSize: 12 }}>
-          {points.length} iterations
-        </span>
-      </div>
+      {title !== false && (
+        <div style={header}>
+          <span>{title}</span>
+          <span style={meta}>
+            {points.length} iteration{points.length === 1 ? "" : "s"}
+          </span>
+        </div>
+      )}
       <svg width={width} height={height} style={{ display: "block" }}>
-        {/* stage bands */}
         {stageSpans.map((band, i) => (
           <rect
             key={i}
@@ -133,7 +130,6 @@ export default function TrajectoryGraph({
           />
         ))}
 
-        {/* y-axis ticks */}
         {yTicks.map((t) => (
           <g key={t}>
             <line
@@ -141,15 +137,21 @@ export default function TrajectoryGraph({
               x2={padL + plotW}
               y1={sy(t)}
               y2={sy(t)}
-              stroke="#f1f5f9"
+              stroke={colors.border}
             />
-            <text x={padL - 6} y={sy(t) + 3} fontSize={10} textAnchor="end" fill="#94a3b8">
+            <text
+              x={padL - 8}
+              y={sy(t) + 3}
+              fontSize={10}
+              fontFamily={font.mono}
+              textAnchor="end"
+              fill={colors.textFaint}
+            >
               {t.toFixed(2)}
             </text>
           </g>
         ))}
 
-        {/* baseline */}
         {baselineScore !== null && baselineScore !== undefined && (
           <>
             <line
@@ -157,52 +159,49 @@ export default function TrajectoryGraph({
               x2={padL + plotW}
               y1={sy(baselineScore)}
               y2={sy(baselineScore)}
-              stroke="#94a3b8"
+              stroke={colors.textFaint}
               strokeDasharray="3 3"
             />
             <text
               x={padL + 4}
               y={sy(baselineScore) - 4}
               fontSize={10}
-              fill="#64748b"
+              fill={colors.textMuted}
             >
               baseline {baselineScore.toFixed(2)}
             </text>
           </>
         )}
 
-        {/* best-so-far */}
         {bestPath && (
           <path
             d={bestPath}
             fill="none"
-            stroke="#eab308"
-            strokeWidth={2}
-            strokeDasharray="4 2"
-            opacity={0.8}
+            stroke={colors.warn}
+            strokeWidth={1.5}
+            strokeDasharray="4 3"
+            opacity={0.85}
           />
         )}
 
-        {/* raw line */}
         {linePath && (
-          <path d={linePath} fill="none" stroke="#1e293b" strokeWidth={1.5} />
+          <path d={linePath} fill="none" stroke={colors.text} strokeWidth={1.25} />
         )}
 
-        {/* points */}
         {points.map((p, i) => (
           <circle
             key={i}
             cx={sx(p.iteration)}
             cy={sy(p.score)}
-            r={p.insight ? 5 : 3.5}
+            r={p.insight ? 4.5 : 3}
             fill={
               p.status === "failed"
-                ? "#ef4444"
+                ? colors.danger
                 : p.status === "pruned"
-                ? "#64748b"
-                : STAGE_STROKE[p.stage]
+                ? colors.textMuted
+                : stageColor(p.stage)
             }
-            stroke="#fff"
+            stroke={colors.bg}
             strokeWidth={1}
           >
             <title>
@@ -213,20 +212,20 @@ export default function TrajectoryGraph({
           </circle>
         ))}
 
-        {/* x-axis */}
         <line
           x1={padL}
           x2={padL + plotW}
           y1={padT + plotH}
           y2={padT + plotH}
-          stroke="#cbd5e1"
+          stroke={colors.borderStrong}
         />
         <text
           x={padL + plotW}
           y={padT + plotH + 18}
           fontSize={10}
+          fontFamily={font.mono}
           textAnchor="end"
-          fill="#94a3b8"
+          fill={colors.textFaint}
         >
           iter {maxX}
         </text>
@@ -236,10 +235,8 @@ export default function TrajectoryGraph({
 }
 
 const wrap: CSSProperties = {
-  background: "#fff",
-  border: "1px solid #e2e8f0",
-  borderRadius: 8,
-  padding: 12,
+  ...card,
+  padding: space.md,
 };
 
 const header: CSSProperties = {
@@ -248,6 +245,13 @@ const header: CSSProperties = {
   alignItems: "baseline",
   fontWeight: 600,
   fontSize: 13,
-  color: "#0f172a",
-  marginBottom: 4,
+  color: colors.text,
+  marginBottom: space.xs,
+};
+
+const meta: CSSProperties = {
+  fontWeight: 400,
+  fontSize: 12,
+  color: colors.textFaint,
+  fontFamily: font.mono,
 };

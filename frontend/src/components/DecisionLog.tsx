@@ -1,11 +1,14 @@
 /**
  * DecisionLog — scrolling live feed of BFTS agent decisions.
  *
- * Entries stream in from SSE. The pane auto-scrolls to the bottom unless the
- * user has scrolled up; clicking an entry emits the associated nodeId so the
- * parent component can highlight the matching node in <AgentTree />.
+ * Notion-style: light surface, a hairline rule between entries, no dark code
+ * panel. Each entry is a compact row with a tiny coloured dot (type),
+ * iteration pill, node id, timestamp, and an optional italic insight quote.
+ * Auto-scrolls to the tail unless the user has scrolled up.
  */
 import { CSSProperties, useEffect, useRef, useState } from "react";
+
+import { card, chip, colors, font, radius, space } from "../theme";
 
 export type DecisionType =
   | "expand"
@@ -33,16 +36,18 @@ export interface DecisionLogProps {
   maxHeight?: number;
 }
 
-const TYPE_META: Record<DecisionType, { color: string; icon: string; label: string }> = {
-  expand: { color: "#3b82f6", icon: "→", label: "expand" },
-  success: { color: "#22c55e", icon: "✓", label: "success" },
-  failed: { color: "#ef4444", icon: "✗", label: "failed" },
-  debug: { color: "#f97316", icon: "↻", label: "debug" },
-  pruned: { color: "#64748b", icon: "✂", label: "pruned" },
-  stage_transition: { color: "#a855f7", icon: "★", label: "stage" },
-  insight: { color: "#6366f1", icon: "💡", label: "insight" },
+const TYPE_META: Record<
+  DecisionType,
+  { dot: string; label: string; chipTone: Parameters<typeof chip>[0] }
+> = {
+  expand: { dot: colors.accent, label: "expand", chipTone: "accent" },
+  success: { dot: colors.success, label: "success", chipTone: "success" },
+  failed: { dot: colors.danger, label: "failed", chipTone: "danger" },
+  debug: { dot: colors.warn, label: "debug", chipTone: "warn" },
+  pruned: { dot: colors.textMuted, label: "pruned", chipTone: "neutral" },
+  stage_transition: { dot: colors.purple, label: "stage", chipTone: "purple" },
+  insight: { dot: colors.purple, label: "insight", chipTone: "purple" },
 };
-
 
 export default function DecisionLog({
   entries,
@@ -53,11 +58,10 @@ export default function DecisionLog({
   const ref = useRef<HTMLDivElement | null>(null);
   const [userScrolled, setUserScrolled] = useState(false);
 
-  // Detect manual scroll-up — if the user is within 24px of the bottom, assume
-  // they want to keep following the tail.
   const onScroll = () => {
     const el = ref.current;
     if (!el) return;
+    // Treat "within 24px of the bottom" as following the tail.
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
     setUserScrolled(!atBottom);
   };
@@ -72,13 +76,11 @@ export default function DecisionLog({
     <div style={wrap}>
       <div style={header}>
         <span>Decision log</span>
-        <span style={{ color: "#64748b", fontWeight: 400 }}>{entries.length} entries</span>
+        <span style={{ color: colors.textFaint, fontWeight: 400, fontSize: 12 }}>
+          {entries.length} {entries.length === 1 ? "entry" : "entries"}
+        </span>
       </div>
-      <div
-        ref={ref}
-        onScroll={onScroll}
-        style={{ ...body, maxHeight }}
-      >
+      <div ref={ref} onScroll={onScroll} style={{ ...body, maxHeight }}>
         {entries.length === 0 && (
           <div style={empty}>Agent hasn't made any decisions yet.</div>
         )}
@@ -87,32 +89,23 @@ export default function DecisionLog({
           return (
             <div
               key={i}
+              className="rag-fade-in"
               onClick={() => onEntryClick?.(e)}
-              style={{
-                ...entryStyle,
-                cursor: onEntryClick ? "pointer" : "default",
-                borderLeft: `3px solid ${meta.color}`,
-              }}
+              style={{ ...entryStyle, cursor: onEntryClick ? "pointer" : "default" }}
             >
               <div style={entryHead}>
-                <span style={{ color: meta.color, fontWeight: 700, marginRight: 8 }}>
-                  {meta.icon} {meta.label.toUpperCase()}
-                </span>
-                <span style={{ color: "#94a3b8" }}>[iter {e.iteration}]</span>
-                {e.nodeId && <span style={{ color: "#475569", marginLeft: 6 }}>{e.nodeId.slice(0, 8)}</span>}
+                <span style={{ ...dot, background: meta.dot }} />
+                <span style={chip(meta.chipTone)}>{meta.label}</span>
+                <span style={iterPill}>iter {e.iteration}</span>
+                {e.nodeId && <span style={nodeIdStyle}>{e.nodeId.slice(0, 8)}</span>}
                 {typeof e.score === "number" && (
-                  <span style={{ color: "#0f172a", marginLeft: 8, fontWeight: 600 }}>
-                    score {e.score.toFixed(3)}
-                  </span>
+                  <span style={scoreStyle}>score {e.score.toFixed(3)}</span>
                 )}
-                <span style={{ color: "#cbd5e1", marginLeft: "auto", fontSize: 11 }}>
-                  {e.timestamp}
-                </span>
+                <span style={{ flex: 1 }} />
+                <span style={timestamp}>{e.timestamp}</span>
               </div>
               <div style={entryBody}>{e.message}</div>
-              {e.insight && (
-                <div style={insightStyle}>{e.insight}</div>
-              )}
+              {e.insight && <div style={insightStyle}>“{e.insight}”</div>}
             </div>
           );
         })}
@@ -122,63 +115,97 @@ export default function DecisionLog({
 }
 
 const wrap: CSSProperties = {
-  background: "#0f172a",
-  color: "#e2e8f0",
-  borderRadius: 8,
+  ...card,
+  padding: 0,
   overflow: "hidden",
-  border: "1px solid #1e293b",
-  fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
 };
 
 const header: CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
-  padding: "8px 12px",
-  background: "#1e293b",
+  alignItems: "baseline",
+  padding: `${space.sm}px ${space.lg}px`,
   fontSize: 13,
   fontWeight: 600,
-  letterSpacing: 0.4,
-  borderBottom: "1px solid #334155",
+  color: colors.text,
+  borderBottom: `1px solid ${colors.border}`,
+  background: colors.bgSubtle,
 };
 
 const body: CSSProperties = {
   overflowY: "auto",
-  padding: "4px 0",
+  padding: `${space.xs}px 0`,
 };
 
 const empty: CSSProperties = {
-  padding: 20,
-  color: "#64748b",
+  padding: `${space.xl}px`,
+  color: colors.textFaint,
   textAlign: "center",
   fontStyle: "italic",
+  fontSize: 13,
 };
 
 const entryStyle: CSSProperties = {
-  padding: "6px 12px",
-  margin: "2px 8px",
-  background: "#111827",
-  borderRadius: 4,
+  padding: `${space.sm}px ${space.lg}px`,
+  borderBottom: `1px solid ${colors.border}`,
+  transition: "background 80ms ease",
 };
 
 const entryHead: CSSProperties = {
   display: "flex",
   alignItems: "center",
-  fontSize: 11,
+  gap: space.xs,
+  fontSize: 12,
   marginBottom: 2,
 };
 
-const entryBody: CSSProperties = {
+const dot: CSSProperties = {
+  width: 6,
+  height: 6,
+  borderRadius: 3,
+  display: "inline-block",
+  marginRight: space.xs,
+};
+
+const iterPill: CSSProperties = {
+  fontFamily: font.mono,
+  fontSize: 11,
+  color: colors.textFaint,
+};
+
+const nodeIdStyle: CSSProperties = {
+  fontFamily: font.mono,
+  fontSize: 11,
+  color: colors.textMuted,
+  background: colors.bgHover,
+  borderRadius: radius.sm,
+  padding: "1px 4px",
+};
+
+const scoreStyle: CSSProperties = {
   fontSize: 12,
-  color: "#cbd5e1",
+  fontWeight: 600,
+  color: colors.text,
+};
+
+const timestamp: CSSProperties = {
+  fontFamily: font.mono,
+  fontSize: 11,
+  color: colors.textFaint,
+};
+
+const entryBody: CSSProperties = {
+  fontSize: 13,
+  color: colors.text,
   whiteSpace: "pre-wrap",
 };
 
 const insightStyle: CSSProperties = {
-  marginTop: 4,
-  padding: "4px 8px",
-  background: "#1e1b4b",
-  borderRadius: 3,
-  fontSize: 11,
-  color: "#c7d2fe",
+  marginTop: space.xs,
+  padding: `${space.xs}px ${space.sm}px`,
+  background: colors.purpleSoft,
+  color: colors.purple,
+  borderRadius: radius.sm,
+  fontSize: 12,
   fontStyle: "italic",
 };

@@ -3,10 +3,12 @@
  *
  * Used by the TestGen page for the GRADE-style reasoning_depth × semantic_distance
  * difficulty matrix, and by Results for score-per-parameter-pair grids. Colour
- * scale is a linear interpolation from `lowColor` to `highColor`; each cell
- * shows the numeric value and (optionally) a count on hover.
+ * scale is a linear interpolation between `lowColor` and `highColor`. The
+ * default palette is tuned to Notion's soft blue callout tone.
  */
 import { CSSProperties, useMemo } from "react";
+
+import { card, colors, font, radius, space } from "../theme";
 
 export interface HeatmapProps {
   matrix: number[][];
@@ -18,6 +20,7 @@ export interface HeatmapProps {
   highColor?: [number, number, number];
   cellSize?: number;
   formatValue?: (v: number) => string;
+  title?: string;
 }
 
 function interp(
@@ -29,17 +32,18 @@ function interp(
   return `rgb(${c(0)},${c(1)},${c(2)})`;
 }
 
-
 export default function Heatmap({
   matrix,
   rowLabels,
   colLabels,
   xAxisLabel,
   yAxisLabel,
-  lowColor = [224, 242, 254],
-  highColor = [30, 64, 175],
-  cellSize = 40,
+  // Soft Notion blue callout → deep accent
+  lowColor = [231, 243, 251],
+  highColor = [35, 131, 226],
+  cellSize = 44,
   formatValue = (v) => (Number.isInteger(v) ? `${v}` : v.toFixed(2)),
+  title,
 }: HeatmapProps) {
   const { min, max } = useMemo(() => {
     let lo = Infinity;
@@ -55,22 +59,25 @@ export default function Heatmap({
     return { min: lo, max: hi };
   }, [matrix]);
 
-  const rowLabelW = 80;
+  const rowLabelW = 84;
   const colLabelH = 28;
-  const width = rowLabelW + colLabels.length * cellSize + 20;
-  const height = colLabelH + rowLabels.length * cellSize + 30;
+  const axisPad = xAxisLabel || yAxisLabel ? 16 : 0;
+  const svgW = rowLabelW + colLabels.length * cellSize + axisPad;
+  const svgH = colLabelH + rowLabels.length * cellSize + 18 + axisPad;
 
   return (
     <div style={wrap}>
-      <svg width={width} height={height}>
+      {title && <div style={header}>{title}</div>}
+      <svg width={svgW} height={svgH}>
         {xAxisLabel && (
           <text
             x={rowLabelW + (colLabels.length * cellSize) / 2}
             y={12}
             textAnchor="middle"
-            fill="#475569"
+            fill={colors.textMuted}
             fontSize={11}
-            fontWeight={600}
+            fontWeight={500}
+            letterSpacing="0.3"
           >
             {xAxisLabel}
           </text>
@@ -83,9 +90,10 @@ export default function Heatmap({
             transform={`rotate(-90 12 ${
               colLabelH + (rowLabels.length * cellSize) / 2
             })`}
-            fill="#475569"
+            fill={colors.textMuted}
             fontSize={11}
-            fontWeight={600}
+            fontWeight={500}
+            letterSpacing="0.3"
           >
             {yAxisLabel}
           </text>
@@ -96,8 +104,9 @@ export default function Heatmap({
             x={rowLabelW + i * cellSize + cellSize / 2}
             y={colLabelH - 6}
             textAnchor="middle"
-            fontSize={10}
-            fill="#64748b"
+            fontSize={11}
+            fill={colors.textFaint}
+            fontFamily={font.mono}
           >
             {c}
           </text>
@@ -105,11 +114,12 @@ export default function Heatmap({
         {rowLabels.map((r, i) => (
           <text
             key={r}
-            x={rowLabelW - 6}
+            x={rowLabelW - 8}
             y={colLabelH + i * cellSize + cellSize / 2 + 4}
             textAnchor="end"
-            fontSize={10}
-            fill="#64748b"
+            fontSize={11}
+            fill={colors.textFaint}
+            fontFamily={font.mono}
           >
             {r}
           </text>
@@ -126,19 +136,19 @@ export default function Heatmap({
                 })`}
               >
                 <rect
-                  width={cellSize - 2}
-                  height={cellSize - 2}
-                  rx={3}
+                  width={cellSize - 3}
+                  height={cellSize - 3}
+                  rx={radius.sm}
                   fill={fill}
-                  stroke="#fff"
+                  stroke={colors.bg}
                 />
                 <text
-                  x={(cellSize - 2) / 2}
-                  y={(cellSize - 2) / 2 + 3}
+                  x={(cellSize - 3) / 2}
+                  y={(cellSize - 3) / 2 + 3}
                   textAnchor="middle"
-                  fontSize={10}
+                  fontSize={11}
                   fontWeight={600}
-                  fill={t > 0.55 ? "#fff" : "#0f172a"}
+                  fill={t > 0.55 ? "#fff" : colors.text}
                 >
                   {formatValue(v)}
                 </text>
@@ -152,9 +162,14 @@ export default function Heatmap({
 }
 
 const wrap: CSSProperties = {
-  background: "#fff",
-  border: "1px solid #e2e8f0",
-  borderRadius: 8,
-  padding: 12,
+  ...card,
+  padding: space.md,
   display: "inline-block",
+};
+
+const header: CSSProperties = {
+  fontSize: 13,
+  fontWeight: 600,
+  color: colors.text,
+  marginBottom: space.sm,
 };

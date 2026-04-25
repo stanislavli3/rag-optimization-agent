@@ -4,10 +4,12 @@
  * Rendered after Stage 4 (Ablation) completes. Each bar represents one
  * non-default parameter in the winning config and shows how much score is lost
  * when that parameter is reverted to its default — i.e. how load-bearing the
- * optimizer's choice is. Bars sort by delta descending; the bar colour follows
- * a red→yellow→green gradient on contribution percentage.
+ * optimizer's choice is. Bars sort by delta descending; colour follows a red →
+ * amber → green ramp tied to contribution percentage.
  */
 import { CSSProperties, useMemo } from "react";
+
+import { card, colors, font, radius, space } from "../theme";
 
 export interface AblationEntry {
   param: string;
@@ -27,21 +29,20 @@ export interface AblationWaterfallProps {
   height?: number;
 }
 
-
 function deltaColor(pct: number): string {
-  // 0% → red, 15% → yellow, 30%+ → green
+  // 0% red → 15% amber → 30%+ green
   const t = Math.max(0, Math.min(1, pct / 30));
   if (t < 0.5) {
     const k = t / 0.5;
-    const r = 239 + (234 - 239) * k;
-    const g = 68 + (179 - 68) * k;
-    const b = 68 + (8 - 68) * k;
+    const r = 224 + (203 - 224) * k;
+    const g = 62 + (145 - 62) * k;
+    const b = 62 + (47 - 62) * k;
     return `rgb(${r | 0},${g | 0},${b | 0})`;
   }
   const k = (t - 0.5) / 0.5;
-  const r = 234 + (34 - 234) * k;
-  const g = 179 + (197 - 179) * k;
-  const b = 8 + (94 - 8) * k;
+  const r = 203 + (15 - 203) * k;
+  const g = 145 + (123 - 145) * k;
+  const b = 47 + (108 - 47) * k;
   return `rgb(${r | 0},${g | 0},${b | 0})`;
 }
 
@@ -67,11 +68,11 @@ export default function AblationWaterfall({
     [sorted],
   );
 
-  const rowH = 36;
-  const padTop = 34;
-  const padBot = 30;
+  const rowH = 40;
+  const padTop = 42;
+  const padBot = 34;
   const chartH = height ?? padTop + padBot + Math.max(1, sorted.length) * rowH;
-  const barLeft = 180;
+  const barLeft = 200;
   const barRight = 120;
   const barWidth = width - barLeft - barRight;
 
@@ -86,8 +87,8 @@ export default function AblationWaterfall({
       <div style={wrap}>
         <div style={header}>Ablation contribution</div>
         <div style={empty}>
-          The winning config matches the default on every parameter — nothing to
-          ablate.
+          The winning config matches the default on every parameter — nothing
+          to ablate.
         </div>
       </div>
     );
@@ -96,46 +97,46 @@ export default function AblationWaterfall({
   return (
     <div style={wrap}>
       <div style={header}>
-        Ablation contribution
+        <span>Ablation contribution</span>
         <span style={subheader}>
           baseline {baselineScore.toFixed(3)} → best {bestScore.toFixed(3)}{" "}
-          (Δ {(bestScore - baselineScore).toFixed(3)})
+          <span style={{ color: colors.success, fontWeight: 500 }}>
+            Δ +{(bestScore - baselineScore).toFixed(3)}
+          </span>
         </span>
       </div>
       <svg width={width} height={chartH} style={{ display: "block" }}>
-        {/* baseline reference line */}
         <line
           x1={baselineX}
           x2={baselineX}
-          y1={padTop - 8}
-          y2={chartH - padBot + 4}
-          stroke="#94a3b8"
-          strokeDasharray="4 3"
+          y1={padTop - 10}
+          y2={chartH - padBot + 6}
+          stroke={colors.textFaint}
+          strokeDasharray="3 3"
           strokeWidth={1}
         />
         <text
           x={baselineX}
-          y={padTop - 12}
-          fill="#64748b"
+          y={padTop - 14}
+          fill={colors.textMuted}
           fontSize={11}
           textAnchor="middle"
         >
           baseline
         </text>
 
-        {/* best reference line */}
         <line
           x1={bestX}
           x2={bestX}
-          y1={padTop - 8}
-          y2={chartH - padBot + 4}
-          stroke="#16a34a"
+          y1={padTop - 10}
+          y2={chartH - padBot + 6}
+          stroke={colors.success}
           strokeWidth={1.5}
         />
         <text
           x={bestX}
-          y={padTop - 12}
-          fill="#16a34a"
+          y={padTop - 14}
+          fill={colors.success}
           fontSize={11}
           fontWeight={600}
           textAnchor="middle"
@@ -150,20 +151,21 @@ export default function AblationWaterfall({
           return (
             <g key={e.param}>
               <text
-                x={barLeft - 10}
+                x={barLeft - 12}
                 y={y + rowH / 2 + 4}
-                fill="#0f172a"
-                fontSize={12}
-                fontWeight={600}
+                fill={colors.text}
+                fontSize={13}
+                fontWeight={500}
                 textAnchor="end"
               >
                 {e.param}
               </text>
               <text
-                x={barLeft - 10}
-                y={y + rowH / 2 + 18}
-                fill="#64748b"
-                fontSize={10}
+                x={barLeft - 12}
+                y={y + rowH / 2 + 20}
+                fill={colors.textFaint}
+                fontSize={11}
+                fontFamily={font.mono}
                 textAnchor="end"
               >
                 {fmtVal(e.optimized_value)} vs {fmtVal(e.default_value)}
@@ -171,56 +173,57 @@ export default function AblationWaterfall({
 
               <rect
                 x={barLeft}
-                y={y + 6}
+                y={y + 8}
                 width={barW}
-                height={rowH - 16}
-                rx={3}
+                height={rowH - 20}
+                rx={radius.sm}
                 fill={color}
-                opacity={0.92}
+                opacity={0.9}
               />
 
               <text
                 x={barLeft + barW + 8}
                 y={y + rowH / 2 + 4}
-                fill="#0f172a"
-                fontSize={12}
+                fill={colors.text}
+                fontSize={13}
                 fontWeight={600}
               >
                 +{e.delta.toFixed(3)}
               </text>
               <text
                 x={barLeft + barW + 8}
-                y={y + rowH / 2 + 18}
-                fill="#64748b"
-                fontSize={10}
+                y={y + rowH / 2 + 20}
+                fill={colors.textFaint}
+                fontSize={11}
               >
-                {e.contribution_pct.toFixed(1)}%
+                {e.contribution_pct.toFixed(1)}% of lift
               </text>
             </g>
           );
         })}
 
-        {/* x-axis scale hint */}
         <line
           x1={barLeft}
           x2={barLeft + barWidth}
-          y1={chartH - padBot + 6}
-          y2={chartH - padBot + 6}
-          stroke="#e2e8f0"
+          y1={chartH - padBot + 8}
+          y2={chartH - padBot + 8}
+          stroke={colors.border}
         />
         <text
           x={barLeft}
-          y={chartH - padBot + 20}
-          fill="#94a3b8"
+          y={chartH - padBot + 22}
+          fill={colors.textFaint}
           fontSize={10}
+          fontFamily={font.mono}
         >
           0
         </text>
         <text
           x={barLeft + barWidth}
-          y={chartH - padBot + 20}
-          fill="#94a3b8"
+          y={chartH - padBot + 22}
+          fill={colors.textFaint}
           fontSize={10}
+          fontFamily={font.mono}
           textAnchor="end"
         >
           Δ {maxDelta.toFixed(2)}
@@ -231,10 +234,7 @@ export default function AblationWaterfall({
 }
 
 const wrap: CSSProperties = {
-  background: "#fff",
-  border: "1px solid #e2e8f0",
-  borderRadius: 8,
-  padding: 16,
+  ...card,
 };
 
 const header: CSSProperties = {
@@ -243,19 +243,20 @@ const header: CSSProperties = {
   alignItems: "baseline",
   fontWeight: 600,
   fontSize: 14,
-  color: "#0f172a",
-  marginBottom: 8,
+  color: colors.text,
+  marginBottom: space.sm,
 };
 
 const subheader: CSSProperties = {
   fontWeight: 400,
   fontSize: 12,
-  color: "#64748b",
+  color: colors.textMuted,
 };
 
 const empty: CSSProperties = {
-  padding: 24,
-  color: "#94a3b8",
+  padding: space.xl,
+  color: colors.textFaint,
   fontStyle: "italic",
   textAlign: "center",
+  fontSize: 13,
 };

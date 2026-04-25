@@ -43,3 +43,9 @@ Thumbs.db
 # Misc
 *.bak
 *.tmp
+
+# Tooling / local-only
+.claude/
+
+# User-uploaded documents, generated testsets, chroma indices
+data/
