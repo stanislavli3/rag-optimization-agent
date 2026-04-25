@@ -103,14 +103,15 @@ export function SketchedCard({
 /* ─── Code block frame ─────────────────────────────────────────────────── */
 
 export function SketchedCodeFrame({ children }: { children: ReactNode }) {
+  // Stroke only — no fill. A solid fill would paint over the <pre> because
+  // the overlay is position:absolute and the pre is in normal flow.
   const draw = (rc: ReturnType<typeof rough.svg>, w: number, h: number) => [
     rc.rectangle(3, 3, Math.max(10, w - 6), Math.max(10, h - 6), {
       stroke: INK,
       strokeWidth: 1.2,
       roughness: 1.8,
       bowing: 1.4,
-      fill: PAPER,
-      fillStyle: "solid",
+      fill: "transparent",
     }),
   ];
   return (
