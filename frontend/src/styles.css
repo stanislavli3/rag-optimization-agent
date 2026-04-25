@@ -332,30 +332,45 @@ input[type="range"] {
   font-weight: 500;
   letter-spacing: -0.005em;
   cursor: pointer;
-  background: transparent;
-  border: none;
   text-decoration: none;
   color: var(--lp-ink);
-  transition: transform 120ms ease;
+  /* Solid CSS fallback so the button is structured even before (or without)
+     the Rough.js overlay finishes drawing. Slightly off-square radius for
+     a hand-cut feel. */
+  background: var(--lp-paper);
+  border: 1.5px solid var(--lp-ink);
+  border-radius: 2px 4px 3px 2px;
+  transition: transform 120ms ease, box-shadow 160ms ease;
 }
 
 .lp-btn > span {
   position: relative;
   z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .lp-btn-svg {
   position: absolute;
   inset: 0;
   pointer-events: none;
+  z-index: 0;
 }
 
 .lp-btn-primary {
-  color: var(--lp-paper);
+  background: #ffffff;
+  color: var(--lp-ink);
+  border-width: 2px;
 }
 
 .lp-btn:hover {
   transform: translate(-1px, -1px);
+  box-shadow: 2px 2px 0 var(--lp-ink);
+}
+
+.lp-btn-primary:hover {
+  box-shadow: 2px 2px 0 var(--lp-rust);
 }
 
 .lp-hero-tags {
@@ -445,6 +460,13 @@ input[type="range"] {
   display: grid;
   place-items: center;
   color: var(--lp-ink);
+  /* Subtle inset background so the icon area reads as deliberate space. */
+  background: rgba(255, 252, 240, 0.5);
+  border-radius: 4px 6px 4px 5px;
+}
+
+.lp-feature-icon svg {
+  display: block;
 }
 
 .lp-feature h3 {
@@ -484,15 +506,20 @@ input[type="range"] {
   position: relative;
   padding: 28px 32px;
   margin-bottom: 56px;
+  /* Solid CSS fallback border (visible even if Rough.js doesn't draw). */
+  border: 1.5px solid var(--lp-ink);
+  border-radius: 3px 5px 3px 4px;
+  background: rgba(255, 252, 240, 0.45);
 }
 
 .lp-card-svg {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  inset: -2px;
+  width: calc(100% + 4px);
+  height: calc(100% + 4px);
   pointer-events: none;
   z-index: 0;
+  opacity: 0.85;
 }
 
 .lp-card > *:not(.lp-card-svg):not(.lp-card-thumbtack) {
@@ -657,7 +684,10 @@ input[type="range"] {
   position: relative;
   padding: 18px 22px;
   /* Faint warm tint so the code area sits visibly inside the paper. */
-  background: rgba(255, 252, 240, 0.55);
+  background: rgba(255, 252, 240, 0.7);
+  /* Solid CSS fallback border (visible even if Rough.js doesn't draw). */
+  border: 1.4px solid var(--lp-ink);
+  border-radius: 2px 4px 3px 2px;
 }
 
 .lp-code-svg {

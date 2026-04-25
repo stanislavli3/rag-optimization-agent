@@ -135,16 +135,17 @@ export function SketchedButton({
   href?: string;
   onClick?: (e: React.MouseEvent) => void;
 }) {
-  const fill = variant === "primary" ? INK : "transparent";
-  const stroke = INK;
+  // Both variants use a stroke-only Rough rectangle on top of CSS-supplied
+  // background + border. Primary is heavier (thicker stroke). The CSS gives
+  // each variant its fill colour so the button is always visible even if
+  // the Rough overlay hasn't drawn yet.
   const draw = (rc: ReturnType<typeof rough.svg>, w: number, h: number) => [
     rc.rectangle(2, 2, Math.max(10, w - 4), Math.max(10, h - 4), {
-      stroke,
-      strokeWidth: 1.5,
+      stroke: INK,
+      strokeWidth: variant === "primary" ? 1.8 : 1.3,
       roughness: 1.4,
       bowing: 1,
-      fill,
-      fillStyle: variant === "primary" ? "solid" : "none",
+      fill: "transparent",
     }),
   ];
 
