@@ -18,6 +18,10 @@ import {
   Check,
   CircledNumber,
   ClipboardIcon,
+  DoodleChart,
+  DoodleGraph,
+  DoodleTree,
+  FeatureFlowArrows,
   FlowDiagram,
   Flourish,
   FooterLine,
@@ -95,6 +99,30 @@ npm run dev`,
   },
 ];
 
+const FEATURES = [
+  {
+    Icon: DoodleGraph,
+    title: "Synthetic test generation",
+    body:
+      "Knowledge graph extraction, seed Q&A, Evol-Instruct evolution, groundedness filter, 2D difficulty matrix — an evaluation set built from your own documents, no hand-labelling required.",
+    caption: "fig. 1",
+  },
+  {
+    Icon: DoodleTree,
+    title: "BFTS auto-optimization",
+    body:
+      "A four-stage tree-search agent (Preliminary → Baseline → Exploration → Ablation) explores the configuration space, prunes failing branches, and isolates the components that carried the win.",
+    caption: "fig. 2",
+  },
+  {
+    Icon: DoodleChart,
+    title: "Results & export",
+    body:
+      "Live trajectory, RAGAS metrics broken down by difficulty and question type, ablation contributions, exportable LangChain or LlamaIndex snippet for the winning config.",
+    caption: "fig. 3",
+  },
+];
+
 interface SetupProps {
   standalone?: boolean;
 }
@@ -105,6 +133,7 @@ export default function Setup({ standalone = false }: SetupProps) {
       <div className="lp-shell">
         {standalone && <Header />}
         <Hero />
+        <Features />
         <GetStarted />
         <LocalLLM />
         <FinalCTA />
@@ -124,6 +153,7 @@ function Header() {
           <span>RAG Optimizer</span>
         </div>
         <div className="lp-nav-links">
+          <a href="#features">Features</a>
           <a href="#setup">Get started</a>
           <a href={REPO_URL} target="_blank" rel="noreferrer">
             GitHub →
@@ -187,6 +217,35 @@ function Hero() {
       </div>
       <div className="lp-hero-diagram">
         <FlowDiagram />
+      </div>
+    </section>
+  );
+}
+
+/* ─── Features ──────────────────────────────────────────────────────── */
+function Features() {
+  return (
+    <section className="lp-section" id="features">
+      <div className="lp-section-eyebrow">What it does</div>
+      <h2 className="lp-section-title">
+        From raw documents to a tuned RAG pipeline.
+      </h2>
+      <p className="lp-section-sub">
+        Three modules wired into one workflow — generate the test set, let the
+        agent optimise, ship the winning config.
+      </p>
+      <FeatureFlowArrows />
+      <div className="lp-features">
+        {FEATURES.map((f) => (
+          <article key={f.title} className="lp-feature">
+            <div className="lp-feature-icon">
+              <f.Icon />
+            </div>
+            <h3>{f.title}</h3>
+            <p>{f.body}</p>
+            <p className="lp-feature-caption">{f.caption}</p>
+          </article>
+        ))}
       </div>
     </section>
   );
@@ -373,6 +432,7 @@ function Footer() {
         <a href={REPO_URL} target="_blank" rel="noreferrer">
           GitHub
         </a>
+        <a href="#features">Features</a>
         <a href="#setup">Get started</a>
       </div>
     </footer>
