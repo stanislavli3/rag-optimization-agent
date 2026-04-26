@@ -452,29 +452,29 @@ export function DoodleChart() {
 
 export function FlowDiagram() {
   return (
-    <svg viewBox="0 0 360 280" width="100%" height="100%" aria-hidden style={{ maxWidth: 380 }}>
+    <svg viewBox="0 0 360 240" width="100%" height="100%" aria-hidden style={{ maxWidth: 380 }}>
       {/* Three boxes */}
       <g fill="none" stroke={INK} strokeWidth="1.5" strokeLinecap="round">
-        <path d="M20 110 Q 18 84 44 80 L 96 76 Q 122 76 122 102 L 122 158 Q 118 182 92 178 L 38 178 Q 16 176 20 154 Z" />
-        <path d="M150 96 Q 148 70 174 70 L 220 68 Q 250 70 250 98 L 250 176 Q 246 198 222 194 L 168 192 Q 146 190 150 164 Z" />
-        <path d="M280 110 Q 278 86 306 84 L 348 82 Q 354 104 354 130 L 354 174 Q 352 196 322 192 L 282 188 Q 270 184 280 162 Z" />
+        <path d="M20 90 Q 18 64 44 60 L 96 56 Q 122 56 122 82 L 122 138 Q 118 162 92 158 L 38 158 Q 16 156 20 134 Z" />
+        <path d="M150 76 Q 148 50 174 50 L 220 48 Q 250 50 250 78 L 250 156 Q 246 178 222 174 L 168 172 Q 146 170 150 144 Z" />
+        <path d="M280 90 Q 278 66 306 64 L 348 62 Q 354 84 354 110 L 354 154 Q 352 176 322 172 L 282 168 Q 270 164 280 142 Z" />
       </g>
       {/* Documents — three lines */}
       <g stroke={INK} strokeWidth="1.2" strokeLinecap="round" fill="none">
-        <path d="M40 112 L 100 112" />
-        <path d="M40 126 L 96 128" />
-        <path d="M40 142 L 100 140" />
-        <path d="M40 158 L 80 158" />
+        <path d="M40 92 L 100 92" />
+        <path d="M40 106 L 96 108" />
+        <path d="M40 122 L 100 120" />
+        <path d="M40 138 L 80 138" />
       </g>
       {/* Agent — gear + arrows */}
       <g stroke={INK} strokeWidth="1.3" fill="none" strokeLinecap="round">
-        <circle cx="200" cy="132" r="22" />
-        <path d="M200 108 L 200 100 M200 164 L 200 172 M176 132 L 168 132 M232 132 L 224 132" />
-        <path d="M183 115 L 178 110 M222 115 L 227 110 M183 149 L 178 154 M222 149 L 227 154" />
+        <circle cx="200" cy="112" r="22" />
+        <path d="M200 88 L 200 80 M200 144 L 200 152 M176 112 L 168 112 M232 112 L 224 112" />
+        <path d="M183 95 L 178 90 M222 95 L 227 90 M183 129 L 178 134 M222 129 L 227 134" />
       </g>
       {/* Winning Config — checkmark */}
       <path
-        d="M295 130 Q 305 142 312 150 Q 322 136 332 122 Q 338 116 342 110"
+        d="M295 110 Q 305 122 312 130 Q 322 116 332 102 Q 338 96 342 90"
         fill="none"
         stroke={RUST}
         strokeWidth="2.4"
@@ -482,10 +482,10 @@ export function FlowDiagram() {
       />
       {/* Arrows between boxes */}
       <g stroke={INK} strokeWidth="1.4" fill="none" strokeLinecap="round">
-        <path d="M126 130 Q 138 128 146 130" />
-        <path d="M142 125 L 148 130 L 142 135" />
-        <path d="M254 132 Q 268 130 276 132" />
-        <path d="M272 127 L 278 132 L 272 137" />
+        <path d="M126 110 Q 138 108 146 110" />
+        <path d="M142 105 L 148 110 L 142 115" />
+        <path d="M254 112 Q 268 110 276 112" />
+        <path d="M272 107 L 278 112 L 272 117" />
       </g>
       {/* Captions */}
       <g
@@ -495,85 +495,10 @@ export function FlowDiagram() {
         fontStyle="italic"
         textAnchor="middle"
       >
-        <text x="71" y="210">documents</text>
-        <text x="200" y="220">agent</text>
-        <text x="316" y="210">best config</text>
+        <text x="71" y="190">documents</text>
+        <text x="200" y="200">agent</text>
+        <text x="316" y="190">best config</text>
       </g>
-      {/* ── Marginalia ── small Caveat-font notes with curved arrows
-           pointing down at each box. */}
-      <g fill={RUST} fontFamily="Caveat, cursive" fontStyle="italic" fontSize="17">
-        {/* Documents */}
-        <text x="20" y="48" textAnchor="start">your PDFs</text>
-        <g stroke={RUST} strokeWidth="1.4" fill="none" strokeLinecap="round">
-          <path d="M52 54 Q 60 64 64 76" />
-          <path d="M59 70 L 64 76 L 70 71" />
-        </g>
-        {/* Agent */}
-        <text x="200" y="36" textAnchor="middle">BFTS — thinks</text>
-        <g stroke={RUST} strokeWidth="1.4" fill="none" strokeLinecap="round">
-          <path d="M200 44 Q 200 56 200 66" />
-          <path d="M194 60 L 200 66 L 206 60" />
-        </g>
-        {/* Best config */}
-        <text x="354" y="48" textAnchor="end">ready to ship</text>
-        <g stroke={RUST} strokeWidth="1.4" fill="none" strokeLinecap="round">
-          <path d="M324 54 Q 320 66 318 80" />
-          <path d="M312 74 L 318 80 L 324 75" />
-        </g>
-      </g>
-    </svg>
-  );
-}
-
-/* ─── Curved arrow + Caveat label bridging hero down to the next section ─ */
-
-export function HeroToFeaturesArrow() {
-  return (
-    <svg
-      className="lp-hero-bridge"
-      viewBox="0 0 200 140"
-      width="200"
-      height="140"
-      aria-hidden
-    >
-      {/* Wavy descending arrow */}
-      <path
-        d="M100 6 Q 116 28 96 50 Q 76 72 104 96 Q 124 112 100 128"
-        fill="none"
-        stroke={RUST}
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-      {/* Arrowhead */}
-      <path
-        d="M93 121 L 100 130 L 108 122"
-        fill="none"
-        stroke={RUST}
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      {/* Caveat note in the gutter */}
-      <text
-        x="20"
-        y="62"
-        fontFamily="Caveat, cursive"
-        fontStyle="italic"
-        fontSize="22"
-        fill={RUST}
-      >
-        here's how
-      </text>
-      <text
-        x="20"
-        y="84"
-        fontFamily="Caveat, cursive"
-        fontStyle="italic"
-        fontSize="22"
-        fill={RUST}
-      >
-        it works ↓
-      </text>
     </svg>
   );
 }
