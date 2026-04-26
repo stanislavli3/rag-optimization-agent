@@ -388,6 +388,25 @@ input[type="range"] {
   align-items: center;
 }
 
+/* ── Bridge arrow between hero and "What it does" ───────────────────────── */
+.lp-hero-bridge-wrap {
+  display: flex;
+  justify-content: center;
+  margin: -32px auto 0;
+  max-width: 1180px;
+  padding: 0 48px;
+}
+
+@media (max-width: 720px) {
+  .lp-hero-bridge-wrap {
+    padding: 0 24px;
+  }
+  .lp-hero-bridge-wrap svg {
+    width: 140px;
+    height: 100px;
+  }
+}
+
 /* ── Sections ───────────────────────────────────────────────────────────── */
 .lp-section {
   padding: 100px 48px;

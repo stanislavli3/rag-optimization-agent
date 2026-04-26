@@ -26,6 +26,7 @@ import {
   Flourish,
   FooterLine,
   GitHubMark,
+  HeroToFeaturesArrow,
   Highlight,
   SketchedButton,
   SketchedCard,
@@ -133,6 +134,9 @@ export default function Setup({ standalone = false }: SetupProps) {
       <div className="lp-shell">
         {standalone && <Header />}
         <Hero />
+        <div className="lp-hero-bridge-wrap">
+          <HeroToFeaturesArrow />
+        </div>
         <Features />
         <GetStarted />
         <LocalLLM />
