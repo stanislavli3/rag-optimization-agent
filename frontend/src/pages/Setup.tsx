@@ -21,7 +21,6 @@ import {
   DoodleChart,
   DoodleGraph,
   DoodleTree,
-  FeatureFlowArrows,
   FlowDiagram,
   Flourish,
   FooterLine,
@@ -234,7 +233,6 @@ function Features() {
         Three modules wired into one workflow — generate the test set, let the
         agent optimise, ship the winning config.
       </p>
-      <FeatureFlowArrows />
       <div className="lp-features">
         {FEATURES.map((f) => (
           <article key={f.title} className="lp-feature">

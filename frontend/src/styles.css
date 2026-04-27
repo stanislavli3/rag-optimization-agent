@@ -479,13 +479,6 @@ input[type="range"] {
   margin: 0;
 }
 
-.lp-features-flow {
-  position: absolute;
-  inset: 48px 0 auto 0;
-  pointer-events: none;
-  z-index: -1;
-}
-
 /* ── Get started ────────────────────────────────────────────────────────── */
 .lp-card {
   position: relative;
@@ -815,9 +808,6 @@ input[type="range"] {
   .lp-features {
     grid-template-columns: 1fr;
     gap: 48px;
-  }
-  .lp-features-flow {
-    display: none;
   }
 }
 
