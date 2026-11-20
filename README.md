@@ -1,353 +1,196 @@
 # RAG Optimizer
 
-### Upload your data. Find the best RAG config. Automatically.
+An agent that builds a test set from your own documents and searches RAG settings (chunking, retrieval, reranking, prompting) for the configuration that scores best on them.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://python.org)
-[![Streamlit](https://img.shields.io/badge/UI-Streamlit-red.svg)](https://streamlit.io)
+## Why
 
-> **RAG Optimizer** is a full-stack platform that finds the optimal Retrieval-Augmented Generation configuration for your specific data. Upload a sample of your documents, and an AI agent systematically tests chunk sizes, retrieval strategies, reranking methods, and prompting techniques to find what works best for your use case.
+Most teams that put an assistant on top of their documents pick chunk sizes, retrieval depth and prompt style by copying defaults, then check a few answers by eye. There is usually no test set, so nobody knows whether answers are grounded in the documents until users complain, and every tuning round costs engineer days. This project tries to make that a measurement step instead: generate questions from the documents, run each candidate pipeline against them, score the answers, and export the winning settings with their scores. It runs locally, with your own API key or a local model, so documents do not have to leave your machine.
 
----
+![BFTS optimization trajectory: score for each of 11 configurations tried, colored by search stage, with the best so far rising from 0.156 to 0.178](docs/assets/bfts-trajectory.png)
 
-## The Problem
+*A small demo run: 11 configurations on one 18-page PDF with 5 hand-written questions. Despite the axis label, these scores come from the lexical fallback scorer, not the RAGAS LLM judge (see Results).*
 
-Every RAG pipeline needs tuning, and every dataset needs different settings. Legal documents need large chunks and exact keyword matching. FAQs need small chunks and semantic search. Medical papers need aggressive reranking. There is no universal best config.
+## What it does
 
-Today, engineers spend days manually tweaking parameters, eyeballing results, with no systematic comparison and no reproducibility. The search space spans **46,000+ possible configurations** (RAGSmith, 2025), making manual optimization impractical.
+- Loads PDF, Markdown and text files and chunks them with configurable size and overlap.
+- Generates a test set from the documents: knowledge-graph facts become seed questions, Evol-Instruct turns them into harder multi-context, reasoning and conditional questions, an LLM judge drops any that are not grounded in the source, and each question gets a difficulty grade.
+- Runs a best-first tree search (adapted from Sakana AI's AI Scientist v2) over 432 pipeline configurations in four stages: preliminary, baseline, exploration and ablation.
+- Scores each run with RAGAS (faithfulness, answer relevancy, context precision and recall) when it is available, and with a lexical heuristic otherwise, plus IR metrics (MRR, NDCG@k, P@k, R@k).
+- Breaks results down by difficulty and question type, and compares configurations with paired bootstrap tests and Cohen's d.
+- Exports the best configuration as JSON or YAML, a LangChain snippet, a trajectory CSV and a Markdown report.
 
-**RAG Optimizer automates this entire process.**
+## How it works
 
----
-
-## Two Novel Contributions
-
-### 1. Generative Test-Data Pipeline
-Instead of requiring users to hand-label evaluation questions, the system synthesizes a complete test set from uploaded documents using a 5-step generative pipeline:
-
-```
-Documents → Knowledge Graph → Seed Q&A → Evol-Instruct Evolution → Groundedness Filter → GRADE Difficulty Matrix
-```
-
-This is conditional generation: `P(question | context, type, difficulty)`. The pipeline produces 4 question types (simple, multi-context, reasoning, conditional) and scores each on a 2D difficulty matrix (reasoning depth × semantic distance).
-
-### 2. BFTS Optimization Loop (adapted from Sakana AI Scientist v2)
-Progressive 4-stage experimentation with best-first tree search:
-
-| Stage | What happens |
-|---|---|
-| **1 — Preliminary** | Prove feasibility: `num_seeds` root configs run end-to-end |
-| **2 — Baseline** | Expand from best seed, tune basic params until convergence |
-| **3 — Exploration** | Best-first tree expansion — always expand the highest-scoring leaf |
-| **4 — Ablation** | Disable each non-default component to measure marginal contribution |
-
-The agent expands the highest-scoring leaf, prunes failing branches, and runs ablations to confirm component contributions. Achieves near-optimal results in ~20% of the iterations grid search would require.
-
----
-
-## How It Works
-
-```
-1. Upload          2. Generate Testset      3. Auto-Optimize         4. Get Results
-───────────        ──────────────────       ──────────────────       ─────────────────
-Upload 10-50       KG extraction →          BFTS agent runs          Dashboard shows
-sample docs        seed Q&A →               15-20 experiments        best config +
-                   Evol-Instruct →          on YOUR data,            metrics + charts +
-                   difficulty matrix        learning from each        exportable config
+```mermaid
+flowchart LR
+    D[Documents<br/>PDF, MD, TXT] --> L[Loader and chunker]
+    L --> KG[Knowledge graph<br/>LLM entity and fact extraction]
+    KG --> S[Seed Q and A]
+    S --> EV[Evol-Instruct<br/>harder question types]
+    EV --> G[Groundedness filter<br/>LLM judge]
+    G --> DM[Difficulty matrix]
+    DM --> T[(Test set)]
+    T --> B[BFTS loop<br/>select best leaf, expand, prune]
+    B --> P[Run pipeline<br/>index, retrieve, rerank, generate]
+    P --> E[Evaluate<br/>RAGAS or heuristic, IR metrics]
+    E --> B
+    B --> A[Ablation<br/>undo one change at a time]
+    A --> X[Export<br/>best config, report]
 ```
 
-### User Flow
+Each node in the search tree is one RAG configuration plus its score. The loop expands the highest-scoring leaf with a small change, retries or abandons failing nodes, moves through the four stages, and finishes by switching off each non-default component in turn to see which change carried the gain.
 
-1. **Upload** sample documents (PDF, text, markdown)
-2. **Generate** test questions (automatic) — KG → seed → evolve → filter → score difficulty
-3. **Click** "Find Best Config" — BFTS agent explores, prunes, and ablates
-4. **Dashboard shows** the winning configuration with full metrics, trajectory, and ablation report
-5. **Export** the config as YAML/JSON or a ready-to-use LangChain / LlamaIndex snippet
+The LLM is chosen at runtime: Anthropic, OpenAI, or any OpenAI-compatible local server (Ollama, LM Studio, vLLM). With no provider configured it falls back to a mock LLM so the pipeline still runs end to end.
 
----
+## Quick start
 
-## Generative AI Components
-
-The project has four explicit LLM integration points:
-
-| # | Component | What it does |
-|---|---|---|
-| **1** | Knowledge Graph Extraction | LLM extracts entities, facts, and relations from each document chunk to seed question generation |
-| **2** | Evol-Instruct Question Evolution | LLM evolves seed questions into harder types: multi-context (requires 2 passages), reasoning (logical inference), conditional (constraint-dependent answer) |
-| **3** | RAGAS LLM-as-Judge | LLM scores each RAG run on faithfulness, answer relevancy, context precision, and context recall |
-| **4** | Groundedness Filter | LLM verifies every generated Q&A pair is fully grounded in source text before it enters the evaluation set |
-
----
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  Streamlit UI  (app.py)                                          │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │
-│  │  Upload  │ │ Optimize │ │ Results  │ │  Export  │           │
-│  │ +TestGen │ │  (BFTS)  │ │Dashboard │ │ Config   │           │
-│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘           │
-└───────┼─────────────┼────────────┼─────────────┼────────────────┘
-        │             │            │             │
-        ▼             ▼            ▼             ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  Python src/ package                                             │
-│                                                                  │
-│  src/testgen/          src/pipeline/       src/optimizer/        │
-│  ┌────────────┐        ┌──────────────┐    ┌─────────────────┐  │
-│  │ KG extract │        │ indexer      │    │ ExperimentMgr   │  │
-│  │ seed gen   │        │ retriever    │    │ BFTSLoop        │  │
-│  │ evol inst  │        │ generator    │    │ AblationRunner  │  │
-│  │ difficulty │        │ runner       │    └─────────────────┘  │
-│  └────────────┘        └──────────────┘                         │
-│                                                                  │
-│  src/evaluation/       src/ingest/                               │
-│  ┌────────────┐        ┌──────────────┐                         │
-│  │ RAGAS eval │        │ loader       │                         │
-│  │ IR metrics │        │ chunker      │                         │
-│  │ statistics │        └──────────────┘                         │
-│  └────────────┘                                                  │
-└─────────────────────────────────────────────────────────────────┘
-        │                       │
-        ▼                       ▼
-┌──────────────┐       ┌──────────────────┐
-│   ChromaDB   │       │  Local LLM       │
-│   + BM25     │       │  (Mistral-7B /   │
-│  (retrieval) │       │  Llama-3.1-8B)   │
-└──────────────┘       └──────────────────┘
-```
-
-### The BFTS Loop (Core Engine)
-
-```python
-# Stage 1: Seed
-seeds = manager.seed_roots()          # num_seeds root configs
-for seed in seeds: execute_node(seed)
-
-# Stages 2–4: Main loop
-while True:
-    node = manager.select_next()      # best-first selection
-    if node is None: break
-    execute_node(node)                # run pipeline + evaluate
-    # Debug-or-abandon on failure: retry with tweaked config, or prune
-    # Stage transitions: PRELIMINARY → BASELINE → EXPLORATION → ABLATION
-```
-
----
-
-## Technical Stack
-
-| Layer | Technology |
-|-------|-----------|
-| **UI** | Streamlit, Plotly |
-| **LLM Generator** | Mistral-7B / Llama-3.1-8B via HuggingFace Transformers |
-| **Embeddings** | all-MiniLM-L6-v2, BAAI/bge-small-en-v1.5 via sentence-transformers |
-| **Vector Store** | ChromaDB + BM25 hybrid search (rank-bm25) |
-| **Reranker** | cross-encoder/ms-marco-MiniLM-L-6-v2 |
-| **Knowledge Graph** | networkx + spaCy |
-| **Evaluation** | RAGAS + custom IR metrics (MRR, NDCG@k, P@k, R@k) |
-| **Optimizer** | BFTS (Best-First Tree Search), adapted from Sakana AI Scientist v2 |
-| **Statistics** | scipy — paired bootstrap tests, BCa confidence intervals, Cohen's d |
-
----
-
-## Synthetic Test Generation Pipeline
-
-The test-generation module is the primary generative AI contribution. It runs in 5 steps:
-
-### Step 1 — Knowledge Graph Extraction
-For each document chunk, the LLM extracts entities, factual statements, and relations between entities. A `networkx` graph is built and cross-chunk connections are found by matching entity names. This mirrors RAGAS's knowledge graph construction phase (Es et al., 2024).
-
-### Step 2 — Seed Question Generation
-For each KG fact, the LLM generates a natural question and a grounded answer (conditioned only on the source chunk). Seeds where the LLM cannot answer from context alone are discarded.
-
-### Step 3 — Evol-Instruct Evolution
-Seeds are evolved into 4 harder question types using the Evol-Instruct paradigm (WizardLM, 2023; adapted by RAGAS):
-
-| Type | Description | LLM operation |
-|---|---|---|
-| **Simple** | Keep seed as-is | — |
-| **Multi-context** | Requires combining 2 KG-connected passages | `P(question | context_1, context_2, relation)` |
-| **Reasoning** | Requires logical inference beyond stated facts | `P(harder_question | seed_question, context)` |
-| **Conditional** | Answer changes under a specified constraint | `P(conditional_question | seed_question, context)` |
-
-Default distribution: simple 30%, multi-context 30%, reasoning 25%, conditional 15%.
-
-### Step 4 — Groundedness Filter
-An LLM judge verifies every evolved Q&A pair: "Is every claim in this answer supported by the context?" Pairs with confidence < 0.7 are rejected (quality gate from RAGEval, ACL 2025).
-
-### Step 5 — GRADE Difficulty Matrix
-Each question is scored on two orthogonal axes:
-- **Reasoning depth** — 1-hop (simple), 2-hop (multi-context), 3-hop (reasoning/conditional)
-- **Semantic distance** — cosine distance between question and context embeddings (high = vocabulary mismatch → harder retrieval)
-
-| Difficulty | Criteria |
-|---|---|
-| Easy | depth=1 AND distance < 0.3 |
-| Medium | depth=2 OR distance 0.3–0.6 |
-| Hard | depth ≥ 3 OR distance > 0.6 |
-
----
-
-## Optimization Search Space
-
-| Parameter | Options | Why It Matters |
-|-----------|---------|---------------|
-| **Chunk Size** | 256, 512, 1024 tokens | Legal docs need big chunks; FAQs need small ones |
-| **Chunk Overlap** | 10%, 20% | Prevents splitting key info across boundaries |
-| **Top-k Depth** | 3, 5, 10 documents | More docs = more noise; fewer = coverage gaps |
-| **Reranking** | None, cross-encoder | Up to 67% retrieval failure reduction |
-| **Search Mode** | vector-only, hybrid (BM25+vector) | 15-30% precision improvement for keyword-heavy domains |
-| **Prompt Style** | zero-shot, few-shot, chain-of-thought | CoT improves across 9 reasoning datasets |
-| **Embedding Model** | all-MiniLM-L6-v2, BAAI/bge-small-en-v1.5 | Domain fine-tuning yields +10-30% gains |
-
----
-
-## Evaluation Framework
-
-### Retrieval Metrics
-
-| Metric | What It Measures |
-|--------|-----------------|
-| **NDCG@k** | Rank-aware graded relevance (MTEB default) |
-| **Context Precision** | Are relevant chunks ranked higher? (RAGAS) |
-| **Context Recall** | Does the context contain all needed info? (RAGAS) |
-| **MRR** | Speed to first relevant document |
-
-### Generation Metrics
-
-| Metric | What It Measures |
-|--------|-----------------|
-| **Faithfulness** | Every claim supported by context? (most important) |
-| **Answer Relevance** | Does the answer address the query? |
-| **Answer Correctness** | F1-like factual overlap with ground truth |
-| **RAGAS Score** | Composite across all dimensions |
-
-### Stratified Evaluation
-Results are broken down by difficulty level (easy / medium / hard) and question type (simple / multi-context / reasoning / conditional). This reveals WHERE the pipeline fails: retriever vocabulary mismatch vs. generator reasoning limitation.
-
-### Statistical Rigor
-All comparisons use paired bootstrap tests (10K samples), BCa confidence intervals, Cohen's d effect sizes, and significance stars (*, **, ***) in comparison tables.
-
----
-
-## Dashboard Pages
-
-| Page | What Users See |
-|------|---------------|
-| **Upload** | Drag-and-drop documents + configure testgen (type distribution, size) |
-| **Optimization** | BFTS strategy controls, live score trajectory, stage progress |
-| **Results** | Radar chart, comparison table with significance stars, ablation bar chart, stratified breakdown |
-| **Export** | Best config as YAML/JSON + LangChain/LlamaIndex code snippet |
-
----
-
-## Project Structure
-
-```
-rag-optimizer/
-├── config.py                  # Config + BFTSConfig dataclasses + RAG_SEARCH_SPACE
-├── run.py                     # CLI entry point
-├── app.py                     # Streamlit UI
-├── requirements.txt
-│
-├── src/
-│   ├── ingest/
-│   │   ├── loader.py          # PDF/MD/TXT → LangChain Documents
-│   │   └── chunker.py         # Configurable chunking strategies
-│   │
-│   ├── testgen/               # ← GENERATIVE AI CORE
-│   │   ├── knowledge_graph.py # Entity/relation extraction (LLM + networkx)
-│   │   ├── seed_generator.py  # Initial Q&A from KG facts (LLM)
-│   │   ├── evol_instruct.py   # Evol-Instruct: 4 question types (LLM)
-│   │   ├── difficulty_matrix.py  # GRADE-style 2D difficulty scoring
-│   │   ├── groundtruth.py     # LLM-as-judge groundedness filter
-│   │   └── pipeline.py        # Orchestrates full testgen flow
-│   │
-│   ├── pipeline/
-│   │   ├── indexer.py         # ChromaDB + BM25 with cache-key reuse
-│   │   ├── retriever.py       # Vector / hybrid / reranked retrieval
-│   │   ├── generator.py       # LLM answer generation (3 prompt styles)
-│   │   └── runner.py          # run_pipeline(config, docs, queries)
-│   │
-│   ├── evaluation/
-│   │   ├── ragas_eval.py      # RAGAS + stratified breakdown
-│   │   ├── ir_metrics.py      # MRR, NDCG@k, P@k, R@k
-│   │   └── statistics.py      # Bootstrap tests, Cohen's d
-│   │
-│   ├── optimizer/             # ← BFTS (Sakana AI Scientist v2)
-│   │   ├── tree_node.py       # SearchNode + Stage + NodeStatus
-│   │   ├── search_space.py    # Mutations, neighbors, ablation configs
-│   │   ├── experiment_manager.py  # Agent: select, expand, prune, stage transitions
-│   │   ├── ablation.py        # Stage 4 ablation runner
-│   │   └── bfts_loop.py       # Main orchestrator (4 stages)
-│   │
-│   └── visualization.py       # Plotly figure builders
-│
-├── notebooks/
-│   ├── 01_ingest_test.ipynb
-│   ├── 02_testgen_demo.ipynb  # KG → evolve → difficulty pipeline demo
-│   ├── 03_pipeline_test.ipynb
-│   ├── 04_eval_test.ipynb
-│   ├── 05_bfts_demo.ipynb     # Tree growing across 4 stages
-│   └── 06_end_to_end.ipynb
-│
-└── data/
-    ├── sample_docs/
-    └── testsets/
-```
-
----
-
-## Quick Start
+Python 3.10+.
 
 ```bash
-# Install
-pip install -r requirements.txt
+git clone https://github.com/stanislavli3/rag-optimization-agent.git
+cd rag-optimization-agent
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt          # pulls PyTorch, transformers, Chroma (about 2 GB)
 python -m spacy download en_core_web_sm
+cp .env.example .env                     # set ANTHROPIC_API_KEY, or point LLM_BASE_URL at a local model
+```
 
-# CLI — full pipeline
-python run.py --docs data/sample_docs --experiments 15 --strategy bfts
+Run it from the command line:
 
-# CLI — skip testgen (load existing testset)
-python run.py --docs data/sample_docs --testset data/testsets/my.csv
+```bash
+# full pipeline: generate a test set, then search
+python run.py --docs path/to/your/docs --experiments 15 --strategy bfts
 
-# Streamlit UI
+# reuse an existing test set
+python run.py --docs path/to/your/docs --testset path/to/testset.csv
+```
+
+Or use the Streamlit app (upload and test generation, optimization, results, export):
+
+```bash
 streamlit run app.py
 ```
 
----
+To use a local model instead of an API key:
 
-## Deep Learning Connection
+```bash
+export LLM_BASE_URL=http://localhost:11434/v1
+export LLM_MODEL=qwen2.5:7b-instruct
+```
 
-This project is built for a **Deep & Generative Learning** course.
+A React and D3 agent console (`frontend/`) with a Django backend (`backend/`) that streams search events over server-sent events is also in the repo and still being wired up: `python backend/manage.py migrate && python backend/manage.py runserver`, then `cd frontend && npm install && npm run dev`.
 
-| Course Topic | Connection |
-|-------------|------------|
-| **Transformers & Attention** | Retrieved context becomes external key-value memory for transformer self-attention |
-| **Autoregressive Models** | Conditional generation `P(y|x,D)` where D is dynamically determined at inference |
-| **Latent Variable Models** | RAG as discrete latent variable model: `P(y|x) = Σ_z P(y|x,z)·P(z|x)`, paralleling VAE with ELBO optimization |
-| **Evaluation** | RAGAS LLM-as-judge + GRADE 2D difficulty matrix |
-| **Emerging Trends** | BFTS agentic tree search (Sakana AI Scientist v2); Evol-Instruct data synthesis (WizardLM) |
+## Test-set generation in detail
 
----
+1. **Knowledge graph extraction.** For each chunk, the LLM extracts entities, facts and relations. A `networkx` graph links chunks that share entities, following the RAGAS knowledge-graph approach (Es et al., 2024).
+2. **Seed questions.** For each fact, the LLM writes a question and an answer conditioned only on the source chunk. Seeds it cannot answer from context are dropped.
+3. **Evol-Instruct evolution.** Seeds are evolved into four types (WizardLM, 2023, as adapted by RAGAS):
 
-## Related Work
+   | Type | Description |
+   |---|---|
+   | Simple | Seed kept as is |
+   | Multi-context | Needs two KG-connected passages |
+   | Reasoning | Needs inference beyond the stated facts |
+   | Conditional | The answer changes under a stated constraint |
 
-| System | What It Does | Gap We Fill |
-|--------|-------------|------------|
-| **AI Scientist v2** (Sakana AI) | Agentic tree search for automated research | We adapt BFTS specifically to RAG-config optimization with structured evaluation |
-| **RAGAS** (EACL 2024) | RAG evaluation metrics + KG-based testgen | No optimization, no UI, no agent loop |
-| **AutoRAG-HP** (EMNLP 2024) | MAB-based RAG tuning | No testgen, no UI, no ablation stage |
-| **GRADE** (EMNLP 2025) | 2D difficulty matrix for RAG eval | No optimization, no testgen pipeline |
-| **WizardLM / Evol-Instruct** (2023) | LLM-driven question evolution | General instruction tuning, not RAG evaluation |
-| **RAGSmith** (2025) | NAS over 46K RAG configs | Research framework, not a usable platform |
-| **LangSmith** | LLM tracing and debugging | No automated optimization |
+   Default mix: simple 30%, multi-context 30%, reasoning 25%, conditional 15%.
+4. **Groundedness filter.** An LLM judge checks that every claim in the answer is supported by the context; pairs below 0.7 confidence are rejected (quality gate from RAGEval).
+5. **Difficulty matrix (GRADE style).** Each question is scored on reasoning depth (1, 2 or 3 hops) and semantic distance between question and context:
 
-**No existing tool offers: upload docs → synthetic testgen → BFTS agent finds best config → visual dashboard → export config.** That's the gap.
+   | Difficulty | Criteria |
+   |---|---|
+   | Easy | depth 1 and distance < 0.3 |
+   | Medium | depth 2 or distance 0.3 to 0.6 |
+   | Hard | depth 3 or more, or distance > 0.6 |
 
----
+## Search space
+
+Defined in `config.py` (`RAG_SEARCH_SPACE`): 3 × 2 × 3 × 2 × 2 × 3 × 2 = 432 configurations.
+
+| Parameter | Options |
+|---|---|
+| Chunk size (characters) | 256, 512, 1024 |
+| Chunk overlap | 10%, 20% |
+| Top-k | 3, 5, 10 |
+| Reranker | none, cross-encoder (`ms-marco-MiniLM-L-6-v2`) |
+| Search mode | vector only, hybrid (BM25 + vector) |
+| Prompt style | zero-shot, few-shot, chain-of-thought |
+| Embedding model | `all-MiniLM-L6-v2`, `BAAI/bge-small-en-v1.5` |
+
+The BFTS stages:
+
+| Stage | What happens |
+|---|---|
+| 1. Preliminary | `num_seeds` root configs run end to end |
+| 2. Baseline | Expand from the best seed and tune basic parameters until scores stop improving |
+| 3. Exploration | Best-first expansion: always expand the highest-scoring leaf |
+| 4. Ablation | Disable each non-default component to measure its contribution |
+
+## Evaluation
+
+| Metric | What it measures |
+|---|---|
+| Faithfulness | Is every claim supported by the retrieved context? |
+| Answer relevancy | Does the answer address the question? |
+| Context precision | Are relevant chunks ranked higher? |
+| Context recall | Does the context hold everything needed? |
+| MRR, NDCG@k, P@k, R@k | Standard retrieval metrics |
+
+Comparisons use paired bootstrap tests (10,000 resamples) and Cohen's d. When `ragas` is not installed or its judge calls fail, `src/evaluation/ragas_eval.py` falls back to a lexical heuristic so the pipeline keeps running offline.
+
+## Tech stack
+
+| Layer | Technology |
+|---|---|
+| UI | Streamlit and Plotly; React, D3 and rough.js agent console |
+| Backend for the console | Django, server-sent events |
+| LLM | Anthropic, OpenAI or an OpenAI-compatible local server (Ollama, LM Studio, vLLM), via LangChain |
+| Embeddings | `all-MiniLM-L6-v2`, `BAAI/bge-small-en-v1.5` (sentence-transformers) |
+| Retrieval | ChromaDB + BM25 (rank-bm25), cross-encoder reranker |
+| Knowledge graph | networkx + spaCy |
+| Evaluation | RAGAS, custom IR metrics, scipy statistics |
+
+## Project structure
+
+```
+rag-optimization-agent/
+├── config.py                  # Config, BFTSConfig, RAG_SEARCH_SPACE
+├── run.py                     # CLI entry point
+├── app.py                     # Streamlit UI
+├── requirements.txt
+├── src/
+│   ├── ingest/                # loader.py, chunker.py
+│   ├── testgen/               # knowledge_graph, seed_generator, evol_instruct,
+│   │                          # groundtruth, difficulty_matrix, pipeline, llm
+│   ├── pipeline/              # indexer, retriever, generator, runner
+│   ├── evaluation/            # ragas_eval, ir_metrics, statistics
+│   ├── optimizer/             # tree_node, search_space, experiment_manager,
+│   │                          # ablation, bfts_loop
+│   └── visualization.py       # Plotly figure builders
+├── backend/                   # Django app for the agent console (SSE event stream)
+├── frontend/                  # React + D3 agent console and landing page
+├── notebooks/                 # 01 to 06: ingest, testgen, pipeline, eval, BFTS, end to end
+└── tests/
+```
+
+## Results
+
+One small demo, not a benchmark. On a single 18-page PDF with 5 hand-written questions, the search ran 11 of the 432 configurations. The best (1,024-character chunks instead of 512, everything else default) scored 0.178 against 0.156 for the default, about 14% higher, as shown in the chart above.
+
+Read that number with care. The RAGAS judge calls kept hitting API rate limits, so the scores come from the lexical fallback scorer, all of them are below 0.2 out of 1, and the same configuration scored 0.169 on an earlier iteration, so run-to-run noise is close to the size of the gain. A proper evaluation would use the generated test set, more questions and several runs per configuration.
+
+## Background
+
+Started as a project for a Deep and Generative Learning course (spring 2026) and built solo by Stanislav Li. It draws on:
+
+| Work | What it contributes here |
+|---|---|
+| AI Scientist v2 (Sakana AI) | Agentic best-first tree search, adapted to RAG configuration |
+| RAGAS (EACL 2024) | Evaluation metrics and knowledge-graph test generation |
+| WizardLM / Evol-Instruct (2023) | LLM-driven question evolution |
+| GRADE (EMNLP 2025) | Two-axis difficulty matrix for RAG evaluation |
+| AutoRAG-HP (EMNLP 2024) | Prior work on automated RAG tuning |
+| RAGSmith (2025) | Prior work on search over large RAG configuration spaces |
 
 ## References
 
@@ -360,16 +203,9 @@ This project is built for a **Deep & Generative Learning** course.
 7. NVIDIA (2025). "Finding the Best Chunking Strategy for Accurate AI Responses." *NVIDIA Technical Blog*.
 8. Anthropic (2024). "Introducing Contextual Retrieval." *anthropic.com*.
 9. Khattab, O., et al. (2024). "DSPy: Compiling Declarative Language Model Calls into Self-Improving Pipelines." *ICLR 2024*.
-10. *(GRADE paper — EMNLP 2025 Findings, citation TBD)*
 
----
+Landing page: [rag-optimization-agent.vercel.app](https://rag-optimization-agent.vercel.app)
 
 ## License
 
-MIT License — See [LICENSE](LICENSE) for details.
-
----
-
-*Stanislav Li — Deep & Generative Learning — Spring 2026*
-
----
+MIT. See [LICENSE](LICENSE).
