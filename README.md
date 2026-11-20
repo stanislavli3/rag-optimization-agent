@@ -22,20 +22,24 @@ Most teams that put an assistant on top of their documents pick chunk sizes, ret
 ## How it works
 
 ```mermaid
-flowchart LR
-    D[Documents<br/>PDF, MD, TXT] --> L[Loader and chunker]
-    L --> KG[Knowledge graph<br/>LLM entity and fact extraction]
-    KG --> S[Seed Q and A]
-    S --> EV[Evol-Instruct<br/>harder question types]
-    EV --> G[Groundedness filter<br/>LLM judge]
-    G --> DM[Difficulty matrix]
+flowchart TD
+    D[Documents: PDF, MD, TXT] --> L[Loader and chunker]
+    subgraph TG[Test-set generation]
+        KG[Knowledge graph<br/>LLM extracts entities and facts] --> S[Seed questions and answers]
+        S --> EV[Evol-Instruct<br/>harder question types]
+        EV --> G[Groundedness filter<br/>LLM judge]
+        G --> DM[Difficulty matrix]
+    end
+    L --> KG
     DM --> T[(Test set)]
-    T --> B[BFTS loop<br/>select best leaf, expand, prune]
-    B --> P[Run pipeline<br/>index, retrieve, rerank, generate]
-    P --> E[Evaluate<br/>RAGAS or heuristic, IR metrics]
-    E --> B
+    subgraph SL[Search loop]
+        B[BFTS: pick best leaf,<br/>expand, prune] --> P[Run pipeline<br/>index, retrieve, rerank, generate]
+        P --> E[Evaluate<br/>RAGAS or heuristic, IR metrics]
+        E --> B
+    end
+    T --> B
     B --> A[Ablation<br/>undo one change at a time]
-    A --> X[Export<br/>best config, report]
+    A --> X[Export best config and report]
 ```
 
 Each node in the search tree is one RAG configuration plus its score. The loop expands the highest-scoring leaf with a small change, retries or abandons failing nodes, moves through the four stages, and finishes by switching off each non-default component in turn to see which change carried the gain.
